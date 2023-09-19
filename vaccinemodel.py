@@ -176,7 +176,6 @@ class VaccineModel:
         p_eta = (1 - self.p) * R_eta + self.p * E_eta
 
         eta = np.array([-math.log(1 - i) for i in p_eta])
-        delta = 0
 
         # Update the equation. Intervention takes place here
         opi_AP_lam = [0] * self.num_group
@@ -184,14 +183,8 @@ class VaccineModel:
             for j in range(self.num_group):
                 if t < self.t_c[-1]: 
                     opi_AP_lam[i] += self.O[i][j] * (1 - self.prop_anti[j]) * (self.lam) 
-                    # numerator_sum = sum(self.O[k][j] *(1 - self.prop_anti[k]) * (self.lam) for k in range(len(self.O)))
-                    # denominator_sum = sum(self.O[k][j] * N[k] for k in range(len(self.O)))
-                    # opi_AP_lam[i] += self.O[i][j] * (numerator_sum / denominator_sum)
                 else:
                     opi_AP_lam[i] += self.O[i][j] * (1 - self.prop_anti[j]) * (self.lam + self.U[j] / P[j])
-                    # numerator_sum = sum(self.O[k][j] *(1 - self.prop_anti[k]) * (self.lam + self.U[k] / P[k]) for k in range(len(self.O)))
-                    # denominator_sum = sum(self.O[k][j] * N[k] for k in range(len(self.O)))
-                    # opi_AP_lam[i] += self.O[i][j] * (numerator_sum / denominator_sum)
 
         # Changes in opinion (P -> A) and other equations (updated with 'self.')
         dOPi_Sdt =  - eta * SA * opi_AP_lam
