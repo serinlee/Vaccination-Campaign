@@ -170,9 +170,6 @@ class VaccineModel:
         P_tilde = self.get_lambda(self.O, P, [1] * self.num_group)
         A_tilde = self.get_lambda(self.O, A, [1] * self.num_group)
         N_tilde = np.sum([P_tilde, A_tilde], axis=0)
-        print(P_tilde)
-        print(A_tilde)
-        print(np.subtract(P_tilde, A_tilde))
         E_eta = np.array([1 / (1 + np.exp(-self.k_E * i)) for i in np.divide(np.subtract(P_tilde, A_tilde), N_tilde)])
         E_eta = np.clip(E_eta, 0.00001, 0.99999)
 
