@@ -103,21 +103,21 @@ class VaccineModel:
         self.param_update_mode = param_update_mode
         self.debug = debug
 
-    # def get_lambda(self, C, I, N):
-    #     lam=[0]*len(C)
-    #     for i in range(len(C)):
-    #         for j in range(len(C)):
-    #             lam[i]+=C[i][j]*I[j]/N[j]
-    #         return lam
-
     def get_lambda(self, C, I, N):
-        lam = [0] * len(C)
+        lam=[0]*len(C)
         for i in range(len(C)):
             for j in range(len(C)):
-                numerator_sum = sum(C[k][j] * I[k] for k in range(len(C)))
-                denominator_sum = sum(C[k][j] * N[k] for k in range(len(C)))
-                lam[i] += C[i][j] * (numerator_sum / denominator_sum)
-        return lam
+                lam[i]+=C[i][j]*I[j]/N[j]
+            return lam
+
+    # def get_lambda(self, C, I, N):
+    #     lam = [0] * len(C)
+    #     for i in range(len(C)):
+    #         for j in range(len(C)):
+    #             numerator_sum = sum(C[k][j] * I[k] for k in range(len(C)))
+    #             denominator_sum = sum(C[k][j] * N[k] for k in range(len(C)))
+    #             lam[i] += C[i][j] * (numerator_sum / denominator_sum)
+    #     return lam
 
     def check_dependency(self, param_name):
         if param_name in ["p1","p2","p3","p4","p5"]:
@@ -183,15 +183,15 @@ class VaccineModel:
         for i in range(self.num_group):
             for j in range(self.num_group):
                 if t < self.t_c[-1]: 
-                    # opi_AP_lam[i] += self.O[i][j] * (1 - self.prop_anti[j]) * (self.lam) 
-                    numerator_sum = sum(self.O[k][j] *(1 - self.prop_anti[k]) * (self.lam) for k in range(len(self.O)))
-                    denominator_sum = sum(self.O[k][j] * N[k] for k in range(len(self.O)))
-                    opi_AP_lam[i] += self.O[i][j] * (numerator_sum / denominator_sum)
+                    opi_AP_lam[i] += self.O[i][j] * (1 - self.prop_anti[j]) * (self.lam) 
+                    # numerator_sum = sum(self.O[k][j] *(1 - self.prop_anti[k]) * (self.lam) for k in range(len(self.O)))
+                    # denominator_sum = sum(self.O[k][j] * N[k] for k in range(len(self.O)))
+                    # opi_AP_lam[i] += self.O[i][j] * (numerator_sum / denominator_sum)
                 else:
-                    # opi_AP_lam[i] += self.O[i][j] * (1 - self.prop_anti[j]) * (self.lam + self.U[j] / P[j])
-                    numerator_sum = sum(self.O[k][j] *(1 - self.prop_anti[k]) * (self.lam + self.U[k] / P[k]) for k in range(len(self.O)))
-                    denominator_sum = sum(self.O[k][j] * N[k] for k in range(len(self.O)))
-                    opi_AP_lam[i] += self.O[i][j] * (numerator_sum / denominator_sum)
+                    opi_AP_lam[i] += self.O[i][j] * (1 - self.prop_anti[j]) * (self.lam + self.U[j] / P[j])
+                    # numerator_sum = sum(self.O[k][j] *(1 - self.prop_anti[k]) * (self.lam + self.U[k] / P[k]) for k in range(len(self.O)))
+                    # denominator_sum = sum(self.O[k][j] * N[k] for k in range(len(self.O)))
+                    # opi_AP_lam[i] += self.O[i][j] * (numerator_sum / denominator_sum)
 
         # Changes in opinion (P -> A) and other equations (updated with 'self.')
         dOPi_Sdt =  - eta * SA * opi_AP_lam
