@@ -19,13 +19,14 @@ class VaccineModel:
         y0 = np.vstack((SA0, IA0, RA0, DA0, SP0, IP0, RP0, DP0)).flatten('F')  # Initial population
         return y0
     
-    # def get_O(self):
-    #     child_rows = np.arange(0, self.num_group, self.num_age_group)
-    #     adult_rows = np.setdiff1d(np.arange(self.num_group), child_rows)
-    #     mask = np.isin(np.arange(self.num_group), adult_rows)[:, None] & np.isin(np.arange(self.num_group), child_rows)
-    #     O = self.C / self.O_m
-    #     O[mask] = 0
-    #     return O
+    def get_O_from_physical_contact(self):
+        child_rows = np.arange(0, self.num_group, self.num_age_group)
+        adult_rows = np.setdiff1d(np.arange(self.num_group), child_rows)
+        mask = np.isin(np.arange(self.num_group), adult_rows)[:, None] & np.isin(np.arange(self.num_group), child_rows)
+        O = self.C.copy()
+        O[mask] = 0
+        O /= np.sum(O.copy())
+        return O
     
     def get_alpha(self):
         return np.array(self.alpha_rr_by_age * self.num_reg_group) * self.overall_alpha
@@ -73,7 +74,8 @@ class VaccineModel:
         self.data_inf_prop = np.loadtxt(f'Data/{self.reg}_data_case.csv', delimiter = ",")/ sum(self.N_by_group)
         self.data_death = np.loadtxt(f'Data/{self.reg}_data_death.csv', delimiter = ",")
         self.C = np.loadtxt(f'Data/{self.reg}_phys_contact_matrix.csv', delimiter = ",")
-        self.O = self.O_m*np.loadtxt(f'Data/{self.reg}_opinion_contact_matrix.csv', delimiter = ",")
+        self.O = np.loadtxt(f'Data/{self.reg}_opinion_contact_matrix.csv', delimiter = ",")
+        self.O = self.get_O_from_physical_contact()
 
         self.prop_sus = 0.71
         self.prop_init_inf = self.data_inf_prop[0] / self.inf_rate_range[0]
@@ -94,32 +96,24 @@ class VaccineModel:
         for param_name, param_value in self.init_param_list:
                 self.update_param(param_name, param_value)
 
-    def get_lambda(self, C, I, N):
-        lam=[0]*len(C)
+    def get_lambda(self, beta, C, I, N):
+        eff_N = np.zeros(len(C))
+        for i in range(len(C)):
+            numerator_sum = sum(C[k][i] * I[k] for k in range(len(C)))
+            denominator_sum = sum(C[k][i] * N[k] for k in range(len(C)))
+            eff_N[i] = (numerator_sum / denominator_sum)
+
+        lam = np.zeros(len(C))
         for i in range(len(C)):
             for j in range(len(C)):
-                lam[i]+=C[i][j]*I[j]/N[j]
+                lam[i] += C[i][j] * beta[j] * eff_N[j]
         return lam
-
-    # def get_lambda(self, C, I, N):
-    #     lam = [0] * len(C)
-    #     for i in range(len(C)):
-    #         for j in range(len(C)):
-    #             numerator_sum = sum(C[k][j] * I[k] for k in range(len(C)))
-    #             denominator_sum = sum(C[k][j] * N[k] for k in range(len(C)))
-    #             lam[i] += C[i][j] * (numerator_sum / denominator_sum)
-    #     return lam
 
     def check_dependency(self, param_name):
         if param_name in ["p1","p2","p3","p4","p5"]:
             existing_value = self.p.copy()
             self.p = self.get_p()
             if self.debug == True: print(f"Changed p from {existing_value[:5]} to {self.p[:5]}")
-
-        if param_name == 'O_m':
-            existing_value = self.O
-            self.O = self.O_m*np.loadtxt(f'Data/{self.reg}_opinion_contact_matrix.csv', delimiter = ",")
-            if self.debug == True: print(f"Changed O from .{existing_value[0][0]:.4f} to {self.O[0][0]:.4f}")
 
         if param_name in ["alpha_rr_by_age", "overall_alpha"]:
             existing_value = self.alpha.copy()
@@ -148,52 +142,35 @@ class VaccineModel:
         I = IA+IP
         D = DA+DP
 
-        prop_anti = np.divide(A,N)
-        phys_lam=self.get_lambda(self.C,I,N)
-        C_P = -np.divide(self.alpha * self.mu * self.VE_death * (IP + self.beta * SP * phys_lam * self.VE_beta), P)
-        C_A = -np.divide(self.alpha * self.mu * (IA + self.beta * SA * phys_lam), A)
+        phys_lam=self.get_lambda(self.beta*np.ones(self.num_group), self.C,I,N)
+        C_P = -np.divide(self.alpha * self.mu * self.VE_death * (IP + SP * phys_lam * self.VE_beta), P)
+        C_A = -np.divide(self.alpha * self.mu * (IA + SA * phys_lam), A)
         max_exp_arg = 709.7827
         R_eta = np.array([1 / (1 + np.exp(np.clip(-self.k_R * i, -max_exp_arg, max_exp_arg))) for i in np.subtract(C_P, C_A)])  # clip to avoid error
         R_eta = np.clip(R_eta, 0.00001, 0.99999)
 
         # Emotional Judegement
-        P_tilde = self.get_lambda(self.O, P, [1] * self.num_group)
-        A_tilde = self.get_lambda(self.O, A, [1] * self.num_group)
-        N_tilde = np.sum([P_tilde, A_tilde], axis=0)
-        E_eta = np.array([1 / (1 + np.exp(-self.k_E * i)) for i in np.divide(np.subtract(P_tilde, A_tilde), N_tilde)])
+        E_eta = np.array([1 / (1 + np.exp(-self.k_E * i)) for i in np.divide(np.subtract(P, A), N)])
         E_eta = np.clip(E_eta, 0.00001, 0.99999)
 
-        p_eta = (1 - self.p) * R_eta + self.p * E_eta
+        eta = (1 - self.p) * R_eta + self.p * E_eta
 
-        eta = np.array([-math.log(1 - i) for i in p_eta])
-
-        # Update the equation. Intervention takes place here
-        # opi_AP_lam = [0] * self.num_group
-        # for i in range(self.num_group):
-        #     for j in range(self.num_group):
-        #         if t < self.t_c[-1]: 
-        #             opi_AP_lam[i] += self.O[i][j] * (1 - self.prop_anti[j]) * (self.lam) 
-        #         else:
-        #             opi_AP_lam[i] += self.O[i][j] * (1 - self.prop_anti[j]) * (self.lam + self.U[j] / P[j])
-
-        opi_AP_lam = [0] * self.num_group
-        for i in range(self.num_group):
-            for j in range(self.num_group):
-                if t < self.t_c[-1]: 
-                    opi_AP_lam[i] += self.O[i][j] * eta[j] * (1 - self.prop_anti[j]) * (self.lam) 
-                else:
-                    opi_AP_lam[i] += self.O[i][j] * eta[j] * (1 - self.prop_anti[j]) * (self.lam + self.U[j] / P[j])
+        opi_AP_lam = np.zeros(self.num_group)
+        if t < self.t_c[-1]:
+            opi_AP_lam = self.get_lambda(eta*self.O_m, self.O, P*self.lam, N)
+        else:
+            opi_AP_lam = self.get_lambda(eta*self.O_m, self.O, P*self.lam + self.U, N)
 
         # Changes in opinion (P -> A) and other equations (updated with 'self.')
-        dOPi_Sdt =  - np.array(opi_AP_lam) * SA 
+        dOPi_Sdt =  - opi_AP_lam * SA 
         dOpi_Idt = np.zeros(self.num_group)
-        dOpi_Rdt =  - np.array(opi_AP_lam) * RA
+        dOpi_Rdt =  - opi_AP_lam * RA
 
-        dSAdt = -self.beta * SA * phys_lam + dOPi_Sdt + 1 / self.rae * RA
-        dSPdt = -self.beta * self.VE_beta * SP * phys_lam - dOPi_Sdt + 1 / self.rae * RP
+        dSAdt = - SA * phys_lam + dOPi_Sdt + 1 / self.rae * RA
+        dSPdt = - self.VE_beta * SP * phys_lam - dOPi_Sdt + 1 / self.rae * RP
 
-        dIAdt = self.beta * SA * phys_lam - (1 - self.alpha) * self.rho * IA - self.alpha * self.mu * IA + dOpi_Idt
-        dIPdt = self.beta * self.VE_beta * SP * phys_lam - (1 - self.alpha * self.VE_death) * self.rho * IP - self.alpha * self.VE_death * self.mu * IP - dOpi_Idt
+        dIAdt = SA * phys_lam - (1 - self.alpha) * self.rho * IA - self.alpha * self.mu * IA + dOpi_Idt
+        dIPdt = self.VE_beta * SP * phys_lam - (1 - self.alpha * self.VE_death) * self.rho * IP - self.alpha * self.VE_death * self.mu * IP - dOpi_Idt
 
         dRAdt = (1 - self.alpha) * self.rho * IA + dOpi_Rdt - 1 / self.rae * RA
         dRPdt = (1 - self.alpha * self.VE_death) * self.rho * IP - dOpi_Rdt - 1 / self.rae * RP
@@ -215,4 +192,10 @@ class VaccineModel:
             sum_A += (SA[-1]+IA[-1]+RA[-1])
         return(sum_death, sum_I, sum_A)
 
+
+#%%
+# from plot import *
+# model = VaccineModel()
+# ret = odeint(model.run_model, model.get_y0(), model.t_f)
+# plot_results_with_calib(model, model.t_f, [ret], error_bar=True)
 # %%
