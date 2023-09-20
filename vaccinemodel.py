@@ -24,7 +24,7 @@ class VaccineModel:
         adult_rows = np.setdiff1d(np.arange(self.num_group), child_rows)
         mask = np.isin(np.arange(self.num_group), adult_rows)[:, None] & np.isin(np.arange(self.num_group), child_rows)
         O = self.C.copy()
-        O[mask] = 0
+        O[mask.T] = 0
         O /= np.sum(O.copy())
         return O
     
@@ -35,7 +35,7 @@ class VaccineModel:
         return (np.array([self.p1,self.p2,self.p3,self.p4,self.p5]*self.num_reg_group))
 
 
-    def __init__(self, fips_num='53011',init_param_list = [], param_update_list = [], t_f= np.linspace(0, 364, 365), debug=False):
+    def __init__(self, fips_num='53011',init_param_list = [], param_update_list = [], t_f= np.linspace(0, 364, 365), debug=False, p_online = 1.0):
         # Baseline parameters
         self.t_c = np.linspace(0, 58, 59)
         self.calib_period = 59
@@ -74,9 +74,9 @@ class VaccineModel:
         self.data_inf_prop = np.loadtxt(f'Data/{self.reg}_data_case.csv', delimiter = ",")/ sum(self.N_by_group)
         self.data_death = np.loadtxt(f'Data/{self.reg}_data_death.csv', delimiter = ",")
         self.C = np.loadtxt(f'Data/{self.reg}_phys_contact_matrix.csv', delimiter = ",")
-        self.O = np.loadtxt(f'Data/{self.reg}_opinion_contact_matrix.csv', delimiter = ",")
-        self.O = self.get_O_from_physical_contact()
-
+        opinion_online = np.loadtxt(f'Data/{self.reg}_opinion_contact_matrix.csv', delimiter = ",")
+        opinion_physical =  self.get_O_from_physical_contact()
+        self.O = (p_online*opinion_online + (1-p_online)*opinion_physical)
         self.prop_sus = 0.71
         self.prop_init_inf = self.data_inf_prop[0] / self.inf_rate_range[0]
         self.p1 = 0.88

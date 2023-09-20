@@ -26,7 +26,7 @@ def get_calib_score_MSE(model, ret):
         values = A_int_by_age[i]/N_int_by_age[i]
         lower_errs = model.data_anti_prop[i]-0.01
         upper_errs = model.data_anti_prop[i]+0.01
-        score_vacc += np.sum(np.where(values > upper_errs, values - upper_errs, np.maximum(lower_errs - values,np.zeros(len(values)))))/np.mean((1-model.data_anti_prop)*model.vacc_rate_range[0])
+        score_vacc += np.sum(np.where(values > upper_errs, values - upper_errs, np.maximum(lower_errs - values,np.zeros(len(values)))))/np.mean((model.data_anti_prop)*model.vacc_rate_range[0])
 
     values = I_int/sum(N_int_by_age)
     lower_errs = model.data_inf_prop/model.inf_rate_range[1]
@@ -45,8 +45,8 @@ def get_calib_score_MSE(model, ret):
     return np.sum(score)
 
 def vacc_calib_MSE(fips_num, samp_list, plot=False):
-    param_update_list = samp_list
-    model = VaccineModel(fips_num, param_update_list, param_update_mode = 'Calibration', t_f= np.linspace(0, 58, 59))
+    param_name = ['overall_alpha','beta','prop_sus','O_m','p1','p2','p3','p4','p5','rae','k_R','k_E','lam']
+    model = VaccineModel(fips_num, init_param_list = samp_list, t_f= np.linspace(0, 58, 59))
     ret = odeint(model.run_model, model.get_y0(), model.t_f)
     score = get_calib_score_MSE(model, ret)
     if plot: plot_results_with_calib(model, model.t_f, [ret],error_bar=True, filename=f'Calib_{fips_num}')
@@ -100,18 +100,18 @@ def run_calibration(fips_num, n_trials, nrep):
     df_final = pd.DataFrame(data_list, columns = x_name)
     col_list = ['vacc_score','dead_score','inf_score']
     for i in range(len(col_list)):
-        df_final.insert(0, col_list[i], results[:,i])  # None can be replaced with your desired default values
+        df_final.insert(0, col_list[i], results[:,i])  
     df_final.insert(0, 'final_score', np.sum(results, axis=1)) 
     df_final = df_final.sort_values(by='final_score')
     return df_final
-# %%
-import argparse
-n_trials = 500
-nrep = 1234
+#  %%
+# import argparse
+# n_trials = 50000
+# nrep = 1234
 # parser = argparse.ArgumentParser()
 # parser.add_argument('-f', '--fips_num', type=int, help='FIPS number (region)')
 # args = parser.parse_args()
-df_final = run_calibration(args.fips_num, n_trials, nrep)
+# df_final = run_calibration(args.fips_num, n_trials, nrep)
 # df_final.to_csv(f'Calibration_Result/{args.fips_num}_calib_result_n_{n_trials}_nrep_{nrep}_test.csv')
 
 # %%
@@ -124,10 +124,12 @@ def get_best_result(fips_num, n_trials, nrep, top_n, sort_by):
     rets = []
     for i in range(top_n):
         param_tuple_list = []
-        for j in range(13):
+        for j in range(len(x_name)):
             param_tuple_list.append((x_name[j], result_df.iloc[i][x_name[j]]))
-        model = VaccineModel(fips_num, param_tuple_list, param_update_mode = 'Calibration', t_f= np.linspace(0, 58, 59))
-        rets.append(odeint(model.run_model, model.get_y0(), model.t_f))
+        model = VaccineModel(fips_num, init_param_list = param_tuple_list, t_f= np.linspace(0, 58, 59), debug = False)
+        ret = odeint(model.run_model, model.get_y0(), model.t_f)
+        # print(get_calib_score_MSE(model, ret))
+        rets.append(ret)
     plot_results_with_calib(model, model.t_f, rets, error_bar=True, filename=f'Calib_{fips_num}_test')
 
 

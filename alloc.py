@@ -7,6 +7,9 @@ class Alloc:
         self.points = pd.read_csv(f'Data/{fips_num}_points.csv')
         self.point_index = point_index
         self.point = self.points.iloc[self.point_index]
+        self.init_param_list = []
+        for i in range(len(self.point)):
+            self.init_param_list.append((self.point.index[i], self.point[i]))
         self.fips_num = fips_num
         self.model = VaccineModel(self.fips_num)
         self.no_policy_outcome_deaths = np.ones(self.model.num_group)*-1
@@ -22,20 +25,12 @@ class Alloc:
         self.num_alloc = num_alloc
         self.n_iter = n_iter
         self.param_update_list = param_update_list
-        print("Update initial param")
-        for param_name in self.point.index.tolist():
-            param_value = self.point[param_name]
-            self.model.update_param(param_name, param_value)
         
     # get outcomes
     def get_no_policy(self):
-        self.model = VaccineModel(self.fips_num, self.param_update_list)
-        print("Update initial param in no policy")
-        for param_name in self.point.index.tolist():
-            param_value = self.point[param_name]
-            self.model.update_param(param_name, param_value)
+        self.model = VaccineModel(self.fips_num, init_param_list = self.init_param_list, 
+                                  param_update_list=self.param_update_list)
         t = self.model.t_f
-        print("Update param U in no policy")
         self.model.update_param("U", np.zeros(self.model.num_group))
         ret = odeint(self.model.run_model, self.model.get_y0(), t)
         [SA, IA, RA, DA, SP, IP, RP, DP] = np.transpose(np.reshape(np.array(ret), (len(t), self.model.num_group, self.model.num_comp)))
@@ -51,17 +46,11 @@ class Alloc:
         return outcome_cost_fair, outcome_disparity_fair
 
     def run_alloc(self, alloc):
-        self.model = VaccineModel(self.fips_num, self.param_update_list, debug=True)
-        print("Update initial param in run_alloc")
-        for param_name in self.point.index.tolist():
-            param_value = self.point[param_name]
-            self.model.update_param(param_name, param_value)
+        self.model = VaccineModel(self.fips_num, init_param_list = self.init_param_list, 
+                                  param_update_list=self.param_update_list, debug = False)
         t = self.model.t_f
-        print("Update param U in run_alloc")
         self.model.update_param("U", alloc)
         ret = odeint(self.model.run_model, self.model.get_y0(), t)
-        plot.plot_results_with_calib(self.model, self.model.t_f, [ret], error_bar=True)
-        
         [SA, IA, RA, DA, SP, IP, RP, DP] = np.transpose(np.reshape(np.array(ret), (len(t), self.model.num_group, self.model.num_comp)))
 
         benefits_deaths = (self.no_policy_outcome_deaths -  (DA[:, -1] + DP[:, -1])).round(4)
@@ -150,37 +139,59 @@ class Alloc:
 
 #%% User can specify popint_index, obj_type, alg, B, num_alloc, n_iter
 
-# import argparse
-# parser = argparse.ArgumentParser()
-# parser.add_argument('-f', '--fips_num', type=int, help='FIPS number (region)')
-# parser.add_argument('-p', '--point_index', type=int, help='Point index (calibration)')
-# parser.add_argument('-B', '--B', type=int, help='Total Budget')
-# args = parser.parse_args()
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('-f', '--fips_num', type=int, help='FIPS number (region)')
+parser.add_argument('-p', '--point_index', type=int, help='Point index (calibration)')
+parser.add_argument('-B', '--B', type=int, help='Total Budget')
+args = parser.parse_args()
 
-# alc = Alloc(fips_num = args.fips_num, obj_type = 'all', alg='reg_age', B=args.B, num_alloc = 1, point_index = args.point_index)
-alc = Alloc(fips_num = 53033, obj_type = 'all', alg='reg_age', B=5000, num_alloc = 1, point_index = 1)
+alc = Alloc(fips_num = args.fips_num, obj_type = 'all', alg='reg_age', B=args.B, num_alloc = 20, point_index = args.point_index)
+# alc = Alloc(fips_num = 53033, obj_type = 'all', alg='reg_age', B=5000, num_alloc = 1, point_index = 0)
 
-date = '0918'
-# param_update = f'("{param_update_list[0][0]}", {param_update_list[0][1]})'
-param_update = None
-alloc_test = alc.get_alloc_list()[:1]
+date = '0920'
+alloc_test = alc.get_alloc_list()
 alc.run_code(parallel=True, alloc_list = alloc_test)
 
-# result_file_path = f'Result/{alc.fips_num}_obj_{alc.obj_type}_alg_{alc.alg}_B_{alc.B}_date_{date}_point_{point_index}'
+# param_update = f'("{param_update_list[0][0]}", {param_update_list[0][1]})'
+# param_update = None
+result_file_path = f'Result/{alc.fips_num}_obj_{alc.obj_type}_alg_{alc.alg}_B_{alc.B}_point_{alc.point_index}_date_{date}'
 # if param_update is not None:
 #     result_file_path += f"_param_{param_update[0][0]}_{param_update[0][1]}"
-# alc.sol_history.to_pickle(result_file_path)
+alc.sol_history.to_pickle(result_file_path)
 
 
 # %%
-df = alc.sol_history
-outcome_cost_fair_deaths_df = pd.DataFrame(df['outcome_cost_fair_deaths'].tolist(), columns=[f'cost_deaths_{i}' for i in range(len(df['outcome_cost_fair_deaths'].iloc[0]))])
-outcome_disparity_fair_deaths_df = pd.DataFrame(df['outcome_disparity_fair_deaths'].tolist(), columns=[f'disparity_deaths_{i}' for i in range(len(df['outcome_disparity_fair_deaths'].iloc[0]))])
-outcome_cost_fair_vacc_df = pd.DataFrame(df['outcome_cost_fair_vacc'].tolist(), columns=[f'cost_vacc_{i}' for i in range(len(df['outcome_cost_fair_vacc'].iloc[0]))])
-outcome_disparity_fair_vacc_df = pd.DataFrame(df['outcome_disparity_fair_vacc'].tolist(), columns=[f'disparity_vacc_{i}' for i in range(len(df['outcome_disparity_fair_vacc'].iloc[0]))])
-df = pd.concat([df, outcome_cost_fair_deaths_df, outcome_disparity_fair_deaths_df, outcome_cost_fair_vacc_df, outcome_disparity_fair_vacc_df], axis=1)
-df.drop(['outcome_cost_fair_deaths', 'outcome_disparity_fair_deaths', 'outcome_cost_fair_vacc', 'outcome_disparity_fair_vacc'], axis=1, inplace=True)
-df = df[[col for col in df.columns if col not in ['benefits_deaths', 'benefits_vacc']] + ['benefits_deaths', 'benefits_vacc']]
+# df = alc.sol_history
+# outcome_cost_fair_deaths_df = pd.DataFrame(df['outcome_cost_fair_deaths'].tolist(), columns=[f'cost_deaths_{i}' for i in range(len(df['outcome_cost_fair_deaths'].iloc[0]))])
+# outcome_disparity_fair_deaths_df = pd.DataFrame(df['outcome_disparity_fair_deaths'].tolist(), columns=[f'disparity_deaths_{i}' for i in range(len(df['outcome_disparity_fair_deaths'].iloc[0]))])
+# outcome_cost_fair_vacc_df = pd.DataFrame(df['outcome_cost_fair_vacc'].tolist(), columns=[f'cost_vacc_{i}' for i in range(len(df['outcome_cost_fair_vacc'].iloc[0]))])
+# outcome_disparity_fair_vacc_df = pd.DataFrame(df['outcome_disparity_fair_vacc'].tolist(), columns=[f'disparity_vacc_{i}' for i in range(len(df['outcome_disparity_fair_vacc'].iloc[0]))])
+# df = pd.concat([df, outcome_cost_fair_deaths_df, outcome_disparity_fair_deaths_df, outcome_cost_fair_vacc_df, outcome_disparity_fair_vacc_df], axis=1)
+# df.drop(['outcome_cost_fair_deaths', 'outcome_disparity_fair_deaths', 'outcome_cost_fair_vacc', 'outcome_disparity_fair_vacc'], axis=1, inplace=True)
+# df = df[[col for col in df.columns if col not in ['benefits_deaths', 'benefits_vacc']] + ['benefits_deaths', 'benefits_vacc']]
+# df = df.sort_values('cost_deaths_0', ascending = False)
+# df.alloc.values
 
-df = df.sort_values('cost_deaths_0', ascending = False)
+# # %%
+# ret_list = []
+# for alloc in df.alloc:
+#     alc.model = VaccineModel(alc.fips_num, init_param_list = alc.init_param_list, 
+#                                   param_update_list=alc.param_update_list)
+#     t = alc.model.t_f
+#     alc.model.update_param("U", alloc)
+#     ret = odeint(alc.model.run_model, alc.model.get_y0(), t)
+#     ret_list.append(ret)
+# plot.plot_results_with_calib(alc.model, t, ret_list, lw=0.5)
+# # %%
+# import seaborn as sns
+# import matplotlib.pyplot as plt
+
+# num = 4
+# plt.figure(figsize = (16,2))
+# sns.heatmap([df.alloc[num]/np.sum(df.alloc[num]), df.benefits_deaths[num]/np.sum(df.benefits_deaths[num]), df.benefits_vacc[num]/np.sum(df.benefits_vacc[num])], cmap="Blues", xticklabels=5, yticklabels=1, cbar=True, annot=True, fmt = '.2f',annot_kws={"fontsize": 8})
+# plt.show()
+# plt.figure(figsize = (16,2))
+# sns.heatmap([df.alloc[num], df.benefits_deaths[num], df.benefits_vacc[num]], cmap="Blues", xticklabels=5, yticklabels=1, cbar=True, annot=True, fmt = '.0f',annot_kws={"fontsize": 8})
+# plt.show()
 # %%
