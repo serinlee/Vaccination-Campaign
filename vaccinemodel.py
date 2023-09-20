@@ -34,7 +34,7 @@ class VaccineModel:
         return (np.array([self.p1,self.p2,self.p3,self.p4,self.p5]*self.num_reg_group))
 
 
-    def __init__(self, fips_num='53011', param_update_list = [], param_update_mode = None, t_f= np.linspace(0, 364, 365), debug=False):
+    def __init__(self, fips_num='53011',init_param_list = [], param_update_list = [], t_f= np.linspace(0, 364, 365), debug=False):
         # Baseline parameters
         self.t_c = np.linspace(0, 58, 59)
         self.calib_period = 59
@@ -75,18 +75,6 @@ class VaccineModel:
         self.C = np.loadtxt(f'Data/{self.reg}_phys_contact_matrix.csv', delimiter = ",")
         self.O = self.O_m*np.loadtxt(f'Data/{self.reg}_opinion_contact_matrix.csv', delimiter = ",")
 
-        # self.N_by_group = [17239., 14081., 12210., 13284., 9836., 15480., 9186., 13548., 11921., 8124., 9972., 5596., 7076., 7443., 5851., 17463., 16710., 14370., 12228., 8448., 54748., 54926., 47929., 46679., 38904.]
-        # self.prop_anti = (1 - np.array([0.0752771242289099, 0.112871899463411, 0.169634068557727, 0.224438921476377, 0.533460778527623] * self.num_reg_group))   
-        # self.data_anti_prop =  (1 - np.array([
-                #     [0.0752771242289099, 0.0779342393276445, 0.0805445330149477, 0.0824993269422107, 0.0839507906965856, 0.0855895400966862, 0.0866781379124674, 0.0883754140768574, ],
-                #     [0.167242306664457, 0.171183270018572, 0.174613430397175, 0.177228335695656, 0.179481281269768, 0.181565086785764, 0.183364737004124, 0.185117028006211],
-                #     [0.533460778527623, 0.541158810397475, 0.547650817274383, 0.553154910061328, 0.556978265890021, 0.560660491134433, 0.564381206538195, 0.567640040029766]
-                # ]))
-        # self.data_inf_prop = (np.array([376, 347, 335, 325, 331, 327, 309, 273]) / sum(self.N_by_group))
-        # self.data_death = np.array([1, 15, 21, 25, 33, 45, 48, 54])
-        # self.C =  np.array(pd.read_csv('Data/contact_matrix_' + self.reg + '.csv', header=None))
-        # self.O = self.get_O()
-
         self.prop_sus = 0.71
         self.prop_init_inf = self.data_inf_prop[0] / self.inf_rate_range[0]
         self.p1 = 0.88
@@ -100,8 +88,11 @@ class VaccineModel:
         self.U = [0] * self.num_group
         self.param_update_list = param_update_list
         self.param_updated  = False
-        self.param_update_mode = param_update_mode
         self.debug = debug
+
+        self.init_param_list = init_param_list
+        for param_name, param_value in self.init_param_list:
+                self.update_param(param_name, param_value)
 
     def get_lambda(self, C, I, N):
         lam=[0]*len(C)
@@ -121,17 +112,17 @@ class VaccineModel:
 
     def check_dependency(self, param_name):
         if param_name in ["p1","p2","p3","p4","p5"]:
-            existing_value = self.p
+            existing_value = self.p.copy()
             self.p = self.get_p()
             if self.debug == True: print(f"Changed p from {existing_value[:5]} to {self.p[:5]}")
 
         if param_name == 'O_m':
             existing_value = self.O
-            self.O *= self.O_m
+            self.O = self.O_m*np.loadtxt(f'Data/{self.reg}_opinion_contact_matrix.csv', delimiter = ",")
             if self.debug == True: print(f"Changed O from .{existing_value[0][0]:.4f} to {self.O[0][0]:.4f}")
 
         if param_name in ["alpha_rr_by_age", "overall_alpha"]:
-            existing_value = self.alpha
+            existing_value = self.alpha.copy()
             self.alpha = self.get_alpha()
             if self.debug == True: print(f"Changed alpha from {existing_value[:5]} to {self.alpha[:5]}")
 
@@ -145,11 +136,10 @@ class VaccineModel:
         self.check_dependency(param_name)
 
     def run_model(self, y, t):
-        if not self.param_updated:
-            if (self.param_update_mode is None and t > self.t_c[-1]) or self.param_update_mode == 'Calibration':
-                for param_name, param_value in self.param_update_list:
-                    self.update_param(param_name, param_value)
-                self.param_updated = True
+        if (not self.param_updated) and (t > self.t_c[-1]):
+            for param_name, param_value in self.param_update_list:
+                self.update_param(param_name, param_value)
+            self.param_updated = True
     
         [SA, IA, RA, DA, SP, IP, RP, DP] = np.transpose(np.reshape(y, (self.num_group,self.num_vacc_group*self.num_disease)))
         A = SA+IA+RA
@@ -178,18 +168,26 @@ class VaccineModel:
         eta = np.array([-math.log(1 - i) for i in p_eta])
 
         # Update the equation. Intervention takes place here
+        # opi_AP_lam = [0] * self.num_group
+        # for i in range(self.num_group):
+        #     for j in range(self.num_group):
+        #         if t < self.t_c[-1]: 
+        #             opi_AP_lam[i] += self.O[i][j] * (1 - self.prop_anti[j]) * (self.lam) 
+        #         else:
+        #             opi_AP_lam[i] += self.O[i][j] * (1 - self.prop_anti[j]) * (self.lam + self.U[j] / P[j])
+
         opi_AP_lam = [0] * self.num_group
         for i in range(self.num_group):
             for j in range(self.num_group):
                 if t < self.t_c[-1]: 
-                    opi_AP_lam[i] += self.O[i][j] * (1 - self.prop_anti[j]) * (self.lam) 
+                    opi_AP_lam[i] += self.O[i][j] * eta[j] * (1 - self.prop_anti[j]) * (self.lam) 
                 else:
-                    opi_AP_lam[i] += self.O[i][j] * (1 - self.prop_anti[j]) * (self.lam + self.U[j] / P[j])
+                    opi_AP_lam[i] += self.O[i][j] * eta[j] * (1 - self.prop_anti[j]) * (self.lam + self.U[j] / P[j])
 
         # Changes in opinion (P -> A) and other equations (updated with 'self.')
-        dOPi_Sdt =  - eta * SA * opi_AP_lam
+        dOPi_Sdt =  - np.array(opi_AP_lam) * SA 
         dOpi_Idt = np.zeros(self.num_group)
-        dOpi_Rdt =  - eta * RA * opi_AP_lam
+        dOpi_Rdt =  - np.array(opi_AP_lam) * RA
 
         dSAdt = -self.beta * SA * phys_lam + dOPi_Sdt + 1 / self.rae * RA
         dSPdt = -self.beta * self.VE_beta * SP * phys_lam - dOPi_Sdt + 1 / self.rae * RP
