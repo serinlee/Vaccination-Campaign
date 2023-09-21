@@ -123,7 +123,7 @@ def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filenam
     axes[0].set_ylabel('Percentage (%)')
     axes[2].set_ylabel("Percentage (%)")
     axes[1].set_ylabel("Person")
-    # axes[0].set_ylim([0, 100])
+    # axes[0].set_ylim([50, 60])
     # axes[2].set_ylim([0.0, 0.05 * 100])
     plt.suptitle(f"Model Validation to {model.reg} County")
     fig.tight_layout()
@@ -169,7 +169,7 @@ def plot_results(model, t, ret_list, lw=0.5):
     c_list = ['r', 'b', 'g', 'grey', 'orange']
     label = ["0-17", "18-64", "65+"]
     fig, axes = plt.subplots(1, 3, figsize=(5 * 3, 6))
-
+    count = 0
     for ret in ret_list:
         [SA, IA, RA, DA, SP, IP, RP, DP] = np.transpose(np.reshape(np.array(ret), (len(t), num_group, model.num_comp)))
         I = IA + IP
@@ -181,10 +181,18 @@ def plot_results(model, t, ret_list, lw=0.5):
         N_int_by_age = get_age_calib_val(model, N)
         for i in range(len(data_anti_prop)):
             axes[0].plot(t, 100 * (1 - A_int_by_age[i] / N_int_by_age[i]),
-                         label='Simulated-Age ' + str(label[i]), linewidth=lw, color=c_list[i], alpha=0.3)
-        axes[1].plot(t, sum(D), color='grey', linewidth=lw, alpha=0.5, label="Simulation Results")
-        axes[2].plot(t, 100 * sum(I) / sum(N), color='grey', linewidth=lw, alpha=0.5, label="Simulation Results")
-
+                        #  label='Simulated-Age ' + str(label[i]),
+                         label = 'Alloc '+str(count),
+                        linewidth=lw, color=c_list[i], alpha=0.3)
+        axes[1].plot(t, sum(D), color='grey', linewidth=lw, alpha=0.5, 
+                    #  label="Simulation Results"
+                     label = 'Alloc '+str(count)
+                     )
+        axes[2].plot(t, 100 * sum(I) / sum(N), color='grey', linewidth=lw, alpha=0.5, 
+                    #  label="Simulation Results",
+                     label = 'Alloc '+str(count)
+                     )
+        count+=1
     for ax in axes:
         ax.set_xlabel("Days")
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.5), fancybox=True, shadow=True, ncol=2)

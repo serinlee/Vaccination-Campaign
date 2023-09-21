@@ -35,7 +35,7 @@ class VaccineModel:
         return (np.array([self.p1,self.p2,self.p3,self.p4,self.p5]*self.num_reg_group))
 
 
-    def __init__(self, fips_num='53011',init_param_list = [], param_update_list = [], t_f= np.linspace(0, 364, 365), debug=False, p_online = 1.0):
+    def __init__(self, fips_num='53011',init_param_list = [], param_update_list = [], t_f= np.linspace(0, 364, 365), debug=False, p_online=0.0):
         # Baseline parameters
         self.t_c = np.linspace(0, 58, 59)
         self.calib_period = 59
@@ -74,9 +74,11 @@ class VaccineModel:
         self.data_inf_prop = np.loadtxt(f'Data/{self.reg}_data_case.csv', delimiter = ",")/ sum(self.N_by_group)
         self.data_death = np.loadtxt(f'Data/{self.reg}_data_death.csv', delimiter = ",")
         self.C = np.loadtxt(f'Data/{self.reg}_phys_contact_matrix.csv', delimiter = ",")
-        opinion_online = np.loadtxt(f'Data/{self.reg}_opinion_contact_matrix.csv', delimiter = ",")
-        opinion_physical =  self.get_O_from_physical_contact()
-        self.O = (p_online*opinion_online + (1-p_online)*opinion_physical)
+        self.opinion_online = np.loadtxt(f'Data/{self.reg}_opinion_contact_matrix.csv', delimiter = ",")
+        self.opinion_physical =  self.get_O_from_physical_contact()
+        self.p_online = p_online
+        self.p_online = 0.0
+        self.O = (self.p_online*self.opinion_online + (1-self.p_online)*self.opinion_physical)
         self.prop_sus = 0.71
         self.prop_init_inf = self.data_inf_prop[0] / self.inf_rate_range[0]
         self.p1 = 0.88
@@ -119,6 +121,11 @@ class VaccineModel:
             existing_value = self.alpha.copy()
             self.alpha = self.get_alpha()
             if self.debug == True: print(f"Changed alpha from {existing_value[:5]} to {self.alpha[:5]}")
+        if param_name == 'p_online':
+            existing_value = self.O.copy()
+            self.O = (self.p_online*self.opinion_online + (1-self.p_online)*self.opinion_physical)
+            if self.debug == True: print(f"Changed O from {existing_value[0][0]} to {self.O[0][0]}")
+
 
     def update_param(self, param_name, param_value):
         existing_value = getattr(self, param_name)
@@ -143,15 +150,13 @@ class VaccineModel:
         D = DA+DP
 
         phys_lam=self.get_lambda(self.beta*np.ones(self.num_group), self.C,I,N)
-        C_P = -np.divide(self.alpha * self.mu * self.VE_death * (IP + SP * phys_lam * self.VE_beta), P)
-        C_A = -np.divide(self.alpha * self.mu * (IA + SA * phys_lam), A)
-        max_exp_arg = 709.7827
-        R_eta = np.array([1 / (1 + np.exp(np.clip(-self.k_R * i, -max_exp_arg, max_exp_arg))) for i in np.subtract(C_P, C_A)])  # clip to avoid error
-        R_eta = np.clip(R_eta, 0.00001, 0.99999)
+        C_P = -np.divide(self.alpha*self.VE_death * (IP + SP * phys_lam * self.VE_beta), P)/self.overall_alpha
+        C_A = -np.divide(self.alpha*(IA + SA * phys_lam), A)/self.overall_alpha
+        R_eta = np.array([1 / (1 + np.exp(-self.k_R * i)) for i in np.subtract(C_P, C_A)])
+        R_eta = np.clip(R_eta, 1e-10, 1-1e-10)
 
         # Emotional Judegement
         E_eta = np.array([1 / (1 + np.exp(-self.k_E * i)) for i in np.divide(np.subtract(P, A), N)])
-        E_eta = np.clip(E_eta, 0.00001, 0.99999)
 
         eta = (1 - self.p) * R_eta + self.p * E_eta
 
@@ -160,7 +165,7 @@ class VaccineModel:
             opi_AP_lam = self.get_lambda(eta*self.O_m, self.O, P*self.lam, N)
         else:
             opi_AP_lam = self.get_lambda(eta*self.O_m, self.O, P*self.lam + self.U, N)
-
+        
         # Changes in opinion (P -> A) and other equations (updated with 'self.')
         dOPi_Sdt =  - opi_AP_lam * SA 
         dOpi_Idt = np.zeros(self.num_group)
