@@ -35,15 +35,15 @@ class VaccineModel:
         return (np.array([self.p1,self.p2,self.p3,self.p4,self.p5]*self.num_reg_group))
 
 
-    def __init__(self, fips_num='53011',init_param_list = [], param_update_list = [], t_f= np.linspace(0, 364, 365), debug=False, p_online=0.0):
+    def __init__(self, fips_num='53011',init_param_list = [], param_update_list = [], t_f= np.linspace(0, 364, 365), debug=False):
         # Baseline parameters
         self.t_c = np.linspace(0, 58, 59)
         self.calib_period = 59
         self.t_f = t_f
         self.beta = 1.67
         self.O_m = 3.36
-        self.k_R = 346019
-        self.k_E = 0.81
+        self.k_R = 30
+        self.k_E = 30
         self.num_disease = 4
         self.num_vacc_group = 2
         self.num_comp = 8
@@ -55,6 +55,8 @@ class VaccineModel:
         self.overall_alpha = 0.00025
         self.rae = 229
         self.lam = 0.01942
+        self.p_online = 0.0
+        self.vaccine_risk = 0.0
 
         # Regional parameters
         self.num_age_group = 5
@@ -76,8 +78,6 @@ class VaccineModel:
         self.C = np.loadtxt(f'Data/{self.reg}_phys_contact_matrix.csv', delimiter = ",")
         self.opinion_online = np.loadtxt(f'Data/{self.reg}_opinion_contact_matrix.csv', delimiter = ",")
         self.opinion_physical =  self.get_O_from_physical_contact()
-        self.p_online = p_online
-        self.p_online = 0.0
         self.O = (self.p_online*self.opinion_online + (1-self.p_online)*self.opinion_physical)
         self.prop_sus = 0.71
         self.prop_init_inf = self.data_inf_prop[0] / self.inf_rate_range[0]
@@ -93,10 +93,12 @@ class VaccineModel:
         self.param_update_list = param_update_list
         self.param_updated  = False
         self.debug = debug
-
         self.init_param_list = init_param_list
         for param_name, param_value in self.init_param_list:
                 self.update_param(param_name, param_value)
+        
+        self.min_rat, self.max_rat,self.min_emo, self.max_emo, self.mean_rat, self.mean_emo = 0,0,0,0,[],[]
+
 
     def get_lambda(self, beta, C, I, N):
         eff_N = np.zeros(len(C))
@@ -121,6 +123,7 @@ class VaccineModel:
             existing_value = self.alpha.copy()
             self.alpha = self.get_alpha()
             if self.debug == True: print(f"Changed alpha from {existing_value[:5]} to {self.alpha[:5]}")
+            
         if param_name == 'p_online':
             existing_value = self.O.copy()
             self.O = (self.p_online*self.opinion_online + (1-self.p_online)*self.opinion_physical)
@@ -136,6 +139,14 @@ class VaccineModel:
         if self.debug == True: print(f"Changed {param_name} from {existing_value} to {getattr(self, param_name)}")
         self.check_dependency(param_name)
 
+    def check_range(self, range_rational, range_emotional):
+        if(self.min_rat > np.min(range_rational)): self.min_rat = np.min(range_rational)
+        if(self.max_rat < np.max(range_rational)): self.max_rat = np.max(range_rational)
+        if(self.min_emo > np.min(range_emotional)): self.min_emo = np.min(range_emotional)
+        if(self.max_emo < np.max(range_emotional)): self.max_emo = np.max(range_emotional)
+        self.mean_rat.append(np.mean(range_rational))
+        self.mean_emo.append(np.mean(range_emotional))
+
     def run_model(self, y, t):
         if (not self.param_updated) and (t > self.t_c[-1]):
             for param_name, param_value in self.param_update_list:
@@ -150,13 +161,16 @@ class VaccineModel:
         D = DA+DP
 
         phys_lam=self.get_lambda(self.beta*np.ones(self.num_group), self.C,I,N)
-        C_P = -np.divide(self.alpha*self.VE_death * (IP + SP * phys_lam * self.VE_beta), P)/self.overall_alpha
-        C_A = -np.divide(self.alpha*(IA + SA * phys_lam), A)/self.overall_alpha
+        C_P = -np.divide(self.alpha*self.VE_death * (IP + SP * phys_lam * self.VE_beta), P)- self.vaccine_risk
+        C_A = -np.divide(self.alpha*(IA + SA * phys_lam), A)
         R_eta = np.array([1 / (1 + np.exp(-self.k_R * i)) for i in np.subtract(C_P, C_A)])
         R_eta = np.clip(R_eta, 1e-10, 1-1e-10)
 
-        # Emotional Judegement
         E_eta = np.array([1 / (1 + np.exp(-self.k_E * i)) for i in np.divide(np.subtract(P, A), N)])
+
+        # range_rational = np.subtract(C_P, C_A)
+        # range_emotional = np.divide(np.subtract(P, A), N)
+        # self.check_range(range_rational, range_emotional)
 
         eta = (1 - self.p) * R_eta + self.p * E_eta
 

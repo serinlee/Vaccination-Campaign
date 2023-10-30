@@ -1,43 +1,34 @@
 #%% import settings
 
-from alloc import *
+from alloc import Alloc
 import numpy as np
-import argparse
+import pandas as pd
 
-parser = argparse.ArgumentParser()
-parser.add_argument('-f', '--fips_num', type=int, help='FIPS number (region)')
-parser.add_argument('-p', '--point_index', type=int, help='Point index (calibration)')
-parser.add_argument('-B', '--B', type=int, help='Budget')
-parser.add_argument('-i', '--sa_index', type=int, help='SA index')
-args = parser.parse_args()
-
-alc = Alloc(fips_num = args.fips_num, obj_type = 'cost_unit', alg='reg_age', B=args.B, num_alloc = 20, point_index = args.point_index)
-
-
-def get_combined_param_update_list(alc):
-    combined_param_update_list = [
-        ("beta", alc.model.beta),
-        ("beta", alc.model.beta / 5),
-        ("beta", alc.model.beta * 5),
-        ("overall_alpha", alc.model.overall_alpha / 5),
-        ("overall_alpha", alc.model.overall_alpha * 5),
-        ("rae", alc.model.rae / 5),
-        ("rae", alc.model.rae * 5),
-        ("lam", alc.model.lam / 5),
-        ("lam", alc.model.lam * 5),
-        ("O", alc.model.O / 5),
-        ("O", alc.model.O * 5),
-        ("O", np.ones(np.shape(alc.model.O)) / np.sum(np.ones(np.shape(alc.model.O))) * np.sum(alc.model.O)),
-        ("O", np.eye(alc.model.num_group) / alc.model.num_group * np.sum(alc.model.O)),
-        ("VE_death", 0.01),
-        ("VE_death", 0.9),
-        ("VE_beta", 0.1),
-        ("VE_beta", 0.9)
+def get_combined_param_update_bounds():
+    # Upper, lower bound, and number of trials
+    combined_param_update_bounds = [
+        [("vaccine_risk", 0, 1, 11)],
+        [("k_R", 0.1, 30, 11)],
+        [("k_E", 0.1, 30, 11)],
+        [("overall_alpha", 0.0001, 0.001, 11)],
+        [("beta", 1, 10, 11)],
+        [("p_online", 0, 1, 11)],
+        [("lam", 0, 0.2, 11)],
+        [("O_m", 1, 10, 11)],
+        [("VE_beta", 0.0, 1.0, 11)],
+        [("VE_death", 0.0, 1.0, 11)],
+        [("rae", 100, 1000, 11)],
     ]
-    return combined_param_update_list
+    return combined_param_update_bounds
+
+def get_sa_list(param_bounds):
+    param_name, lower_bound, upper_bound, num_trials = param_bounds[0]
+    step = (upper_bound - lower_bound) / (num_trials - 1)
+    sa_list = [(param_name, round(lower_bound + i * step, 5)) for i in range(num_trials)]
+    return sa_list
 
 def extract_values_from_filepath(filepath):
-    pattern = r"Result/result_sa_(\d+)_p_(\d+)_B_(\d+)_date_\d+"
+    pattern = r"SA_Result/result_sa_(\d+)_p_(\d+)_B_(\d+)_date_\d+"
     match = re.match(pattern, filepath)
     if match:
         sa_index = int(match.group(1))
@@ -47,97 +38,94 @@ def extract_values_from_filepath(filepath):
     else:
         return None
 #%% 
-date = '0723'
+date = '1025'
+num_alloc = 1
 
-alc.param_update_list = [combined_param_update_list[args.sa_index]]
-param_update = f'("{alc.param_update_list[0][0]}", {alc.param_update_list[0][1]})'
-alloc_test = alc.get_alloc_list()[:2]
-alc.run_code(parallel=True, alloc_list = alloc_test)
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('-f', '--fips_num', type=int, help='FIPS number (region)')
+parser.add_argument('-p', '--point_index', type=int, help='Point index (calibration)')
+parser.add_argument('-B', '--B', type=int, help='Budget')
+parser.add_argument('-i', '--sa_index', type=int, help='SA index')
+args = parser.parse_args()
 
-alc.sol_history['param_update'] = param_update
-file_name = 'sa_'+str(args.sa_index)+'_p_'+str(args.point_index)+'_B_'+str(args.B)
-result_file_path = f'Result/result_{file_name}_date_{date}'
-alc.sol_history.to_pickle(result_file_path)
+global_top_df = pd.DataFrame()
+param_bounds = get_combined_param_update_bounds()[args.sa_index]
+sa_list = get_sa_list(param_bounds)
 
+for sa in sa_list:
+    alc = Alloc(fips_num = args.fips_num, obj_type = 'all', alg='reg_age', B=args.B, num_alloc = num_alloc, point_index = args.point_index)
+    alc.param_update_list  = [sa]
+    print(sa)
+    alloc_test = alc.get_alloc_list()
+    alc.run_code(parallel=True, alloc_list = alloc_test, save_result = False)
+    #Now get the best results
+    outcome_list = ['cost_deaths_0','disparity_deaths_0','cost_vacc_0','disparity_vacc_0']
+    for outcome_metric in outcome_list:
+        (top_reg, top_age, alloc_test) = alc.get_alloc_top_age_reg(alc.sol_history, outcome_metric)
+        alc = Alloc(fips_num = args.fips_num, obj_type = outcome_metric, alg='reg_age', B=args.B, num_alloc = num_alloc, point_index = args.point_index)
+        alc.param_update_list  = [sa]
+        alc.run_code(parallel=True, alloc_list = alloc_test)
+        final_df = pd.concat([top_reg, top_age, alc.sol_history], ignore_index = True)
+        top_df = final_df.sort_values(outcome_metric, ascending = False if 'cost' in outcome_metric else True).iloc[:1]
+        top_df['obj'] = outcome_metric
+        top_df['param_update'] = str(sa)
+        global_top_df = pd.concat([global_top_df, top_df], ignore_index = True)
 
-# %% Read results and identify top results
-import pandas as pd
-import glob
-import re
+file_name = f'SA_Result/top_{args.fips_num}_sa_{args.sa_index}_p_{args.point_index}_B_{args.B}_date_{date}'
+with np.printoptions(linewidth=10000):
+    global_top_df.to_csv(file_name+'.csv')
+global_top_df.to_pickle(file_name+'.pkl')
 
-date = '0723'
-pattern = f'Result/result_sa_*_{date}'
-file_paths = glob.glob(pattern)
+# %% For testing purpose
+# import plot
 
-for file_path in file_paths:
-    point_index, sa_index, B = extract_values_from_filepath(file_path)
-    alc = Alloc(fips_num = fips_num, B = B, point_index = point_index)
-    combined_param_update_list = get_combined_param_update_list(alc)
-    alc.param_update_list = [combined_param_update_list[sa_index]]
-    alloc_list = alc.get_alloc_top_age_reg(file_path)
-    alc.run_code(parallel=True, alloc_list = alloc_list)
-    param_update = f'("{alc.param_update_list[0][0]}", {alc.param_update_list[0][1]})'
-    alc.sol_history['param_update'] = param_update
-    existing_data = pd.read_pickle(file_path)
-    combined_data = pd.concat([existing_data, alc.sol_history])
-    combined_data.to_pickle(file_path+"_final")
+# sa_index = 0
+# fips_num = 53047
+# point_index = 8
+# B = 100
+# date = '1025'
 
-#  %% Plot results
-from plot import *
-from alloc import *
-import numpy as np
-import pandas as pd
-from scipy.integrate import odeint 
-import glob
-import re
+# param_bounds = get_combined_param_update_bounds() [sa_index]
+# param_name, lower_bound, upper_bound, num_trials = param_bounds[0]
+# step = (upper_bound - lower_bound) / (num_trials - 1)
+# sa_list = [(param_name, round(lower_bound + i * step, 1)) for i in range(num_trials)]
+# global_sol_history = pd.DataFrame()
 
-date = '0723'
-fips_num = '53011'
-pattern = f'Result/result_sa_*_{date}_final'
-file_paths = glob.glob(pattern)
-file_paths = sorted(file_paths, key = extract_values_from_filepath)
+# for sa in sa_list:
+#     alc = Alloc(fips_num = fips_num, obj_type = 'all', alg='reg_age', B=B, num_alloc = 1, point_index = point_index)
+#     alc.param_update_list  = [sa]
+#     alloc_test = np.stack((np.zeros(25), alc.get_alloc_list()[1]))
+#     ret_list = alc.run_code(parallel=False, alloc_list = alloc_test, save_result = True)
+#     alc.sol_history['param_update'] = str(sa)
+#     global_sol_history = pd.concat([global_sol_history, alc.sol_history])
+#     plot.plot_results_with_calib(alc.model, alc.model.t_f, ret_list, lw=0.5, error_bar = True)
 
-outcome_df = pd.DataFrame(columns = ['point_index', 'sa_index','B','best_alloc', 'worst_alloc', 'best_alloc_ben', 'worst_alloc_ben','best_alloc_tot', 'worst_alloc_tot'])
-[best_alloc, worst_alloc, best_alloc_ben, worst_alloc_ben] = [np.zeros(model.num_group)]*4
-for file_path in file_paths:
-    point_index, sa_index, B = extract_values_from_filepath(file_path)
-    print(point_index, sa_index, B)
-    alc = Alloc(fips_num = fips_num, B = B, point_index = point_index)
-    combined_param_update_list = get_combined_param_update_list(alc)
-    param_update_list = [combined_param_update_list[sa_index]]
+#%% additional steps
+# import ast
+# B = 100
+# file_path = f'SA_Result/sa_53047_VE_beta_p_8_B_100_date_1025'
+# df = pd.read_pickle(file_path+'.pkl')
+# grouped = df.groupby('param_update')
+# grouped_dfs = {group_name: group for group_name, group in grouped}
+# outcome_list = ['cost_deaths_0','disparity_deaths_0']
+# row = df.iloc[0]
 
-    result_df = pd.read_pickle(file_path)
-    top_alloc = result_df.nlargest(1, 'cost_unit')
-    least_alloc = result_df.nsmallest(1, 'cost_unit')
-
-    interest_df = pd.concat([top_alloc, least_alloc])
-
-    ret_list = []
-    for index, case in interest_df.iterrows():
-        # model = VaccineModel(fips_num, param_update_list)
-        # for param_name in alc.point.index.tolist():
-        #     param_value = alc.point[param_name]
-        #     model.update_param(param_name, param_value)
-        # t = model.t_f
-        # model.update_param("U", case['alloc']) 
-        # ret = odeint(model.run_model, model.get_y0(), t)
-        # ret_list.append(ret)
-        print("Benefit ", case.cost_unit)
-        if index==top_alloc.index: best_alloc = case.alloc; best_alloc_ben = case.benefits
-        if index==least_alloc.index: worst_alloc = case.alloc; worst_alloc_ben = case.benefits
-    
-    new_row = pd.DataFrame([[point_index, sa_index, B, best_alloc, worst_alloc, best_alloc_ben, worst_alloc_ben, np.sum(best_alloc_ben), np.sum(worst_alloc_ben)]], columns = outcome_df.columns)
-    outcome_df = pd.concat([outcome_df, new_row])
-outcome_df.to_pickle("final_result")
-    # model = VaccineModel(fips_num, param_update_list)
-    # for param_name in alc.point.index.tolist():
-    #     param_value = alc.point[param_name]
-    #     model.update_param(param_name, param_value)
-    # t = model.t_f
-    # ret = odeint(model.run_model, model.get_y0(), t)
-    # ret_list.append(ret)
-    # file_name = f'p_{point_index}_sa_{sa_index}_B_{B}'
-    # # plot_deaths_with_calib(t, ret_list, lw=2)
-    # plot_deaths_with_calib(t, ret_list, lw=2, filename = file_name)
+# global_top_df = pd.DataFrame()
+# for param_update, group_df in grouped_dfs.items():
+#     for outcome_metric in outcome_list:
+#         print(f"Param: {[ast.literal_eval(param_update)]}, outcome: {outcome_metric}")
+#         alc = Alloc(fips_num = row['fips'], obj_type = outcome_metric, alg='reg_age', 
+#                     B=B, num_alloc = 20, point_index = row['point_index'])
+#         alc.param_update_list = [ast.literal_eval(param_update)]
+#         (top_reg, top_age, alloc_test) = alc.get_alloc_top_age_reg(group_df, outcome_metric)
+#         alc.run_code(parallel=True, alloc_list = alloc_test)
+#         final_df = pd.concat([top_reg, top_age, alc.sol_history], ignore_index = True)
+#         final_df['obj'] = outcome_metric
+#         final_df['param_update'] = param_update
+#         top_df = final_df.sort_values(outcome_metric, ascending = False if 'cost' in outcome_metric else True).iloc[:1]
+#         global_top_df = pd.concat([global_top_df, top_df], ignore_index = True)
+# with np.printoptions(linewidth=10000):
+#     global_top_df.to_csv(file_path+"_top.csv")
 
 # %%

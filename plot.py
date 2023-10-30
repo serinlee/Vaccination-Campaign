@@ -25,10 +25,16 @@ def plot_data_points(model):
     axes[2].plot(data_date, data_death*death_rate_range[0], marker='o',linestyle='',label='Target data')
     
     for ax in axes:
-        ax.set_xlabel("Days")
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.5), fancybox=True, shadow=True, ncol=2)
-        ax.set_xticks(data_date)
-        ax.set_xticklabels(date_label, rotation=40)
+        # ax.set_xlabel("Days")
+        # ax.set_xticks(data_date)
+        # ax.set_xticklabels(date_label, rotation=40)
+        date = [i*7 for i in range(int(model.t_c[-1]/7))]
+        date_label_full = [i+1 for i in range(int(model.t_c[-1]/7))]
+        ax.set_xlabel("Week", fontsize=14)
+        ax.set_xticks(date)
+        ax.set_xticklabels(date_label_full[:len(date)], rotation=0)
+        ax.tick_params(axis='both', which='both', labelsize=10)  # Adjust
 
     # axes[2].set_title('Dead population')
     # axes[0].set_ylabel('Vaccinated population (%)')
@@ -41,8 +47,8 @@ def plot_data_points(model):
     axes[1].set_ylim([0.0, 0.05*100])
     plt.suptitle("Target Data by Health Outcomes")
     fig.tight_layout()
-    plt.savefig("Plot/Target.png")
-    plt.show()
+    plt.savefig(f"Plot/Target_{str(model.reg)}.png")
+    # plt.show()
 
 def get_age_calib_val(model, X):
     X_sum = X.reshape(model.num_reg_group, model.num_age_group, int(X.size / (model.num_age_group * model.num_reg_group)))
@@ -51,7 +57,7 @@ def get_age_calib_val(model, X):
     X_interest = [X_sum[0], sum(X_sum[1:4]), X_sum[-1]]
     return X_interest
 
-def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filename=None):
+def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filename=None, title=''):
     data_date = model.data_date
     data_anti_prop = model.data_anti_prop
     death_rate_range = model.death_rate_range
@@ -63,9 +69,7 @@ def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filenam
 
     c_list = ['r', 'b', 'g', 'grey', 'orange']
     label = ["0-17", "18-64", "65+"]
-    data_date_full = t
-    date_label_full = ['Jan/23', 'Feb/23', 'Mar/23', 'Apr/23', 'May/23', 'Jun/23', 'Jul/23', 'Aug/23', 'Sep/23', 'Oct/23', 'Nov/23', 'Dec/23']
-
+    
     fig, axes = plt.subplots(1, 3, figsize=(5 * 3, 6))
 
     for idx, ret in enumerate(ret_list):
@@ -77,6 +81,7 @@ def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filenam
         D = DA + DP
         A_int_by_age = get_age_calib_val(model, A)
         N_int_by_age = get_age_calib_val(model, N)
+        print(round((1-sum(A[:,-1])/sum(N[:,-1]))*100,3), round((sum(I[:,-1])/sum(N[:,-1]))*100,3), sum(D[:,-1]))
         for i in range(len(data_anti_prop)):
             axes[0].plot(t, 100 * (1 - A_int_by_age[i] / N_int_by_age[i]),
                          label=f'Simulated-Age {label[i]}' if idx == 0 else "", linewidth=lw, color=c_list[i], alpha=0.3)
@@ -91,41 +96,55 @@ def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filenam
                 axes[0].plot(data_date, 100 * (1 - data_anti_prop[i]) * vacc_rate_range[0], color=c_list[i], marker='o',
                              linestyle='', label='Observed data')
 
-        axes[1].plot(t, sum(D), color='grey', linewidth=lw, alpha=0.5,
+        axes[2].plot(t, sum(D), color='grey', linewidth=lw, alpha=0.5,
                      label="Simulation Results" if idx == 0 else "")
-        axes[2].plot(t, 100 * sum(I) / sum(N), color='grey', linewidth=lw, alpha=0.5,
+        axes[1].plot(t, 100 * sum(I) / sum(N), color='grey', linewidth=lw, alpha=0.5,
                      label="Simulation Results" if idx == 0 else "")
 
         if error_bar and idx == 0:
-            axes[1].errorbar(data_date, data_death * death_rate_range[0],
+            axes[2].errorbar(data_date, data_death * death_rate_range[0],
                              yerr=[data_death * (death_rate_range[0] - death_rate_range[1]),
                                    data_death * (death_rate_range[2] - death_rate_range[0])],
                              fmt='o', capsize=5, markersize=3, label='Observed data')
-            axes[2].errorbar(data_date, 100 * data_inf_prop / inf_rate_range[0],
+            axes[1].errorbar(data_date, 100 * data_inf_prop / inf_rate_range[0],
                              yerr=[100 * data_inf_prop * (1 / inf_rate_range[2] - 1 / inf_rate_range[0]),
                                    100 * data_inf_prop * (1 / inf_rate_range[0] - 1 / inf_rate_range[1])],
                              fmt='o', capsize=5, markersize=3, label='Observed data')
         elif not error_bar and idx == 0:
-            axes[1].plot(data_date, data_death * death_rate_range[0], marker='o', linestyle='',
+            axes[2].plot(data_date, data_death * death_rate_range[0], marker='o', linestyle='',
                          label='Observed data')
-            axes[2].plot(data_date, 100 * data_inf_prop / inf_rate_range[0], marker='o', linestyle='',
+            axes[1].plot(data_date, 100 * data_inf_prop / inf_rate_range[0], marker='o', linestyle='',
                          label='Estimated data')
 
-    # for ax in axes:
-    #     ax.set_xlabel("Month")
-    #     ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.5), fancybox=True, shadow=True, ncol=2)
-    #     ax.set_xticks(data_date_full)
-    #     ax.set_xticklabels(date_label_full, rotation=40)
+    for ax in axes:
+        ax.set_xlabel("Month")
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.5), fancybox=True, shadow=True, ncol=2)    
+        if t[-1] <= model.t_c[-1]:
+            date = [i*7 for i in range(int(t[-1]/7))]
+            date_label_full = [i+1 for i in range(int(t[-1]/7))]
+            ax.set_xlabel("Week", fontsize=14)
+            ax.set_xticks(date)
+            ax.set_xticklabels(date_label_full[:len(date)], rotation=0)
+            ax.tick_params(axis='both', which='both', labelsize=10)  # Adjust the font size (12 is just an example)
+        else:
+            date = [i*30.5 for i in range(int(t[-1]/30.5))]
+            date_label_full = [i+1 for i in range(int(t[-1]/30.5))]
+            # date_label_full = ['Jan/23', 'Feb/23', 'Mar/23', 'Apr/23', 'May/23', 'Jun/23', 'Jul/23', 'Aug/23', 'Sep/23', 'Oct/23', 'Nov/23', 'Dec/23']
+            ax.set_xlabel("Month", fontsize=14)
+            ax.set_xticks(date)
+            ax.set_xticklabels(date_label_full[:len(date)], rotation=0)
+            ax.tick_params(axis='both', which='both', labelsize=10)  # Adjust the font size (12 is just an example)
 
-    axes[0].set_title('Vaccinated population')
-    axes[2].set_title('Infectious population')
-    axes[1].set_title('Dead population')
-    axes[0].set_ylabel('Percentage (%)')
-    axes[2].set_ylabel("Percentage (%)")
-    axes[1].set_ylabel("Person")
-    # axes[0].set_ylim([50, 60])
+    axes[0].set_title('Vaccinated population', fontsize=14)
+    axes[1].set_title('Infectious population', fontsize=14)
+    axes[2].set_title('Dead population', fontsize=14)
+    axes[0].set_ylabel('Percentage (%)', fontsize=14)
+    axes[1].set_ylabel("Percentage (%)", fontsize=14)
+    axes[2].set_ylabel("Person", fontsize=14)
+    axes[0].set_ylim([0, 100])
     # axes[2].set_ylim([0.0, 0.05 * 100])
-    plt.suptitle(f"Model Validation to {model.reg} County")
+        
+    plt.suptitle(title, fontsize=18)
     fig.tight_layout()
     if filename is None:
         plt.show()
@@ -216,6 +235,6 @@ def plot_results(model, t, ret_list, lw=0.5):
 # y0 = model.get_y0()
 # t = model.t_c
 # ret = odeint(model.run_model, y0, t)
-# plot_results_with_calib(t, [ret])
+# plot_results_with_calib(model, t, [ret])
 # plot_results(t, [ret])
 # %%

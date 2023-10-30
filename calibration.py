@@ -48,7 +48,7 @@ values,np.zeros(len(values)))))/np.mean(model.data_death*model.death_rate_range[
     return np.sum(score)
 
 def vacc_calib_MSE(fips_num, samp_list, plot=False):
-    param_name = ['overall_alpha','beta','prop_sus','O_m','p1','p2','p3','p4','p5','rae','k_R','k_E','lam']
+    param_name = ['overall_alpha','beta','prop_sus','O_m','p1','p2','p3','p4','p5','rae','k_R','k_E','lam', 'vaccine_risk']
     model = VaccineModel(fips_num, init_param_list = samp_list, t_f= np.linspace(0, 58, 59))
     ret = odeint(model.run_model, model.get_y0(), model.t_f)
     score = get_calib_score_MSE(model, ret)
@@ -77,27 +77,21 @@ def run_code_parallel(obj_function, fips_num, param_update_lists):
     return results 
 
 def run_calibration(fips_num, n_trials, nrep):
-    x_name = ['overall_alpha','beta','prop_sus','O_m','p1','p2','p3','p4','p5','rae','k_R','k_E','lam']
+    x_name = ['overall_alpha','beta','prop_sus','O_m','p1','p2','p3','p4','p5','rae','k_R','k_E','lam','vaccine_risk']
     x_dim = len(x_name)
-    overall_alpha_range = [0.0001,0.0003] 
+    overall_alpha_range = [0.0001,0.0002] 
     beta_range = [1.5, 3.5] # default: 2.0
-    prop_sus_range = [0.2, 0.8] # default: 0.6
-    O_m_range = [1.5, 6] # default: 0.5
+    prop_sus_range = [0.4, 0.8] # default: 0.6
+    O_m_range = [3, 6] # default: 0.5
     lam_range = [0.01, 0.05] # default: 0.25
-
-    # overall_alpha_range = [0.0001,0.0001] 
-    # beta_range = [3.15, 3.15]
-    # prop_sus_range = [0.5, 0.5]
-    # O_m_range = [5.89, 5.89] # default: 0.5
-    # lam_range = [0.048, 0.048] # default: 0.25
-
     p_range = [0.001, 0.999] # default: 0.5
     rae_range = [150, 250] # default: 200
-    k_R_range = [3, 50] 
-    k_E_range = [3, 50]
+    vaccine_risk_range = [0, 0.0001] # default: 0.
+    k_R_range = [10*5000, 30*5000] 
+    k_E_range = [10, 30]
 
     x_list = np.array([overall_alpha_range,beta_range,prop_sus_range,O_m_range,
-                    p_range,p_range,p_range,p_range,p_range,rae_range,k_R_range,k_E_range,lam_range])
+                    p_range,p_range,p_range,p_range,p_range,rae_range,k_R_range,k_E_range,lam_range, vaccine_risk_range])
     x_l = x_list[:,0]
     x_u = x_list[:,1]
     obj_function = vacc_calib_MSE
@@ -120,39 +114,39 @@ def run_calibration(fips_num, n_trials, nrep):
     df_final = df_final.sort_values(by='final_score')
     return df_final
 
-def get_best_result(fips_num, n_trials, nrep, top_n, sort_by):
-    result_df = pd.read_csv(f'Calibration_Result/{fips_num}_calib_result_n_{n_trials}_nrep_{nrep}.csv')
-    x_name = ['overall_alpha','beta','prop_sus','O_m','p1','p2','p3','p4','p5','rae','k_R','k_E','lam']
-    weights = {'vacc_score': 0.5, 'dead_score': 0.1, 'inf_score': 0.1}
-    result_df['weighted_sum'] = result_df.apply(lambda row: sum(row[score] * weight for score, weight in weights.items()), axis=1)
-    result_df = result_df.sort_values(by='weighted_sum')
+def get_best_result(fips_num, index_list, sort_by='final_score'):
+    result_df = pd.read_csv(f'Calibration_Result/{fips_num}_calib_result_n_50000_date_{date}.csv')
+    x_name = ['overall_alpha','beta','prop_sus','O_m','p1','p2','p3','p4','p5','rae','k_R','k_E','lam', 'vaccine_risk']
+    # weights = {'vacc_score': 0.5, 'dead_score': 0.1, 'inf_score': 0.1}
+    # result_df['weighted_sum'] = result_df.apply(lambda row: sum(row[score] * weight for score, weight in weights.items()), axis=1)
+    # result_df = result_df.sort_values(by='weighted_sum')
     result_df = result_df.sort_values(sort_by)
-    best_df = result_df.iloc[:top_n]
-    # best_df.to_csv(f'Data/{fips_num}_points.csv', index=False, columns = x_name)
+    best_df = result_df.iloc[index_list]
+    best_df.to_csv(f'Data/{fips_num}_points_new.csv', index=False, columns = x_name)
     rets = []
-    for i in range(top_n):
+    for i in (index_list):
         param_tuple_list = []
         for j in range(len(x_name)):
             x_set = (x_name[j], result_df.iloc[i][x_name[j]])
             param_tuple_list.append(x_set)
-        t = np.linspace(0, 58, 59)
-        model = VaccineModel(fips_num, init_param_list = param_tuple_list, t_f= t, p_online = 0.0)
+        t = np.linspace(0, 358, 359)
+        model = VaccineModel(fips_num, init_param_list = param_tuple_list, t_f= t)
         ret = odeint(model.run_model, model.get_y0(), t)
         # print(get_calib_score_MSE(model, ret))
         rets.append(ret)
-    plot_results_with_calib(model, t, rets, error_bar=True, lw=1)
-
+    County_name = {53011: 'Clark County', 53033: 'King County', 53047: 'Okanogan County'}
+    # f"Model results without policy in {County_name.get(fips_num)}" 
+    plot_results_with_calib(model, t, rets, error_bar=True, lw=1.5, filename=f'{fips_num}_calib', title=f"Model calibration to {County_name.get(fips_num)}")
+    
 
 #  %%
-import argparse
-n_trials = 50000
-nrep = 1234
-parser = argparse.ArgumentParser()
-parser.add_argument('-f', '--fips_num', type=int, help='FIPS number (region)')
-args = parser.parse_args()
-df_final = run_calibration(args.fips_num, n_trials, nrep)
-df_final.to_csv(f'Calibration_Result/{args.fips_num}_calib_result_n_{n_trials}_nrep_{nrep}.csv')
-
-# df_final = run_calibration(53011, n_trials, nrep)
-
-# %%
+if __name__ == '__main__':
+    import argparse
+    n_trials = 500
+    date = '1030'
+    nrep = 1234
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-f', '--fips_num', type=int, help='FIPS number (region)')
+    args = parser.parse_args()
+    df_final = run_calibration(args.fips_num, n_trials, nrep)
+    df_final.to_csv(f'Calibration_Result/{args.fips_num}_calib_result_n_{n_trials}_date_{date}.csv')
