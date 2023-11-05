@@ -35,15 +35,13 @@ class VaccineModel:
         return (np.array([self.p1,self.p2,self.p3,self.p4,self.p5]*self.num_reg_group))
 
 
-    def __init__(self, fips_num='53011',init_param_list = [], param_update_list = [], t_f= np.linspace(0, 364, 365), debug=False):
+    def __init__(self, fips_num=53033,init_param_list = [], param_update_list = [], t_f= np.linspace(0, 364, 365), debug=False):
         # Baseline parameters
         self.t_c = np.linspace(0, 58, 59)
         self.calib_period = 59
         self.t_f = t_f
         self.beta = 1.67
         self.O_m = 3.36
-        self.k_R = 30
-        self.k_E = 30
         self.num_disease = 4
         self.num_vacc_group = 2
         self.num_comp = 8
@@ -56,7 +54,11 @@ class VaccineModel:
         self.rae = 229
         self.lam = 0.01942
         self.p_online = 0.0
-        self.vaccine_risk = 0.0
+        self.vaccine_risk = 0.00005
+        self.k_R = 50000
+        fips_list = [53047, 53033]
+        fips_ind = fips_list.index(fips_num)
+        self.k_E = [2.5, 10][fips_ind]
 
         # Regional parameters
         self.num_age_group = 5
@@ -81,11 +83,11 @@ class VaccineModel:
         self.O = (self.p_online*self.opinion_online + (1-self.p_online)*self.opinion_physical)
         self.prop_sus = 0.71
         self.prop_init_inf = self.data_inf_prop[0] / self.inf_rate_range[0]
-        self.p1 = 0.88
-        self.p2 = 0.98
-        self.p3 = 0.77
-        self.p4 = 0.37
-        self.p5 = 0.11
+        self.p1 = 0.5
+        self.p2 = 0.5
+        self.p3 = 0.5
+        self.p4 = 0.5
+        self.p5 = 0.5
         self.alpha = self.get_alpha()
         self.y0 = self.get_y0()
         self.p = self.get_p()

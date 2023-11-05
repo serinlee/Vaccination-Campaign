@@ -48,7 +48,6 @@ values,np.zeros(len(values)))))/np.mean(model.data_death*model.death_rate_range[
     return np.sum(score)
 
 def vacc_calib_MSE(fips_num, samp_list, plot=False):
-    param_name = ['overall_alpha','beta','prop_sus','O_m','p1','p2','p3','p4','p5','rae','k_R','k_E','lam', 'vaccine_risk']
     model = VaccineModel(fips_num, init_param_list = samp_list, t_f= np.linspace(0, 58, 59))
     ret = odeint(model.run_model, model.get_y0(), model.t_f)
     score = get_calib_score_MSE(model, ret)
@@ -77,21 +76,21 @@ def run_code_parallel(obj_function, fips_num, param_update_lists):
     return results
 
 def run_calibration(fips_num, n_trials, nrep):
-    x_name = ['overall_alpha','beta','prop_sus','O_m','p1','p2','p3','p4','p5','rae','k_R','k_E','lam','vaccine_risk']
+    x_name = ['overall_alpha','beta','prop_sus','O_m','rae','lam']
     x_dim = len(x_name)
     overall_alpha_range = [0.0001,0.0002] 
     beta_range = [1.5, 3.5] # default: 2.0
     prop_sus_range = [0.4, 0.8] # default: 0.6
     O_m_range = [3, 6] # default: 0.5
     lam_range = [0.01, 0.05] # default: 0.25
-    p_range = [0.001, 0.999] # default: 0.5
     rae_range = [150, 250] # default: 200
-    vaccine_risk_range = [0, 0.0001] # default: 0.
-    k_R_range = [10*5000, 30*5000] 
-    k_E_range = [10, 30]
 
-    x_list = np.array([overall_alpha_range,beta_range,prop_sus_range,O_m_range,
-                    p_range,p_range,p_range,p_range,p_range,rae_range,k_R_range,k_E_range,lam_range, vaccine_risk_range])
+    # p_range = [0.001, 0.999] # default: 0.5
+    # vaccine_risk_range = [0, 0.0001] # default: 0.
+    # k_R_range = [10*5000, 30*5000] 
+    # k_E_range = [10, 30]
+
+    x_list = np.array([overall_alpha_range,beta_range,prop_sus_range,O_m_range, rae_range, lam_range])
     x_l = x_list[:,0]
     x_u = x_list[:,1]
     obj_function = vacc_calib_MSE
@@ -115,14 +114,14 @@ def run_calibration(fips_num, n_trials, nrep):
     return df_final
 
 def get_best_result(fips_num, index_list, date, sort_by='final_score', t = np.linspace(0, 358, 359)):
-    result_df = pd.read_csv(f'Calibration_Result/{fips_num}_calib_result_n_50000_date_{date}.csv')
-    x_name = ['overall_alpha','beta','prop_sus','O_m','p1','p2','p3','p4','p5','rae','k_R','k_E','lam', 'vaccine_risk']
+    result_df = pd.read_csv(f'Calibration_Result/{fips_num}_calib_result_n_5000_date_{date}.csv')
+    x_name = ['overall_alpha','beta','prop_sus','O_m','rae','lam']
     # weights = {'vacc_score': 0.5, 'dead_score': 0.1, 'inf_score': 0.1}
     # result_df['weighted_sum'] = result_df.apply(lambda row: sum(row[score] * weight for score, weight in weights.items()), axis=1)
     # result_df = result_df.sort_values(by='weighted_sum')
     result_df = result_df.sort_values(sort_by)
     best_df = result_df.iloc[index_list]
-    best_df.to_csv(f'Data/{fips_num}_points_new.csv', index=False, columns = x_name)
+    best_df.to_csv(f'Data/{fips_num}_points_{date}.csv', index=False, columns = x_name)
     rets = []
     for i in (index_list):
         param_tuple_list = []
@@ -141,8 +140,8 @@ def get_best_result(fips_num, index_list, date, sort_by='final_score', t = np.li
 #  %%
 if __name__ == '__main__':
     import argparse
-    n_trials = 50000
-    date = '1030'
+    n_trials = 5000
+    date = '1105'
     nrep = 1234
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--fips_num', type=int, help='FIPS number (region)')

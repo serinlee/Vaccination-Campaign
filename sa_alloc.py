@@ -6,10 +6,10 @@ import pandas as pd
 
 def get_full_way_sa(fips):
     # Upper, lower bound, and number of trials
-    fips_list = [53047, 53033]
-    fips_ind = fips_list.index(fips)
     vr_list = np.linspace(0, 0.0001, 5)
     kr_list = np.linspace(5000, 10000, 5)
+    fips_list = [53047, 53033]
+    fips_ind = fips_list.index(fips)
     ke_list = [np.linspace(1,5,5), np.linspace(5,15,5)][fips_ind]
     p_list = np.linspace(0,1,5)
 
@@ -58,7 +58,7 @@ def extract_values_from_filepath(filepath):
         return None
 #%% 
 date = '1104'
-num_alloc = 1
+num_alloc = 10
 
 import argparse
 parser = argparse.ArgumentParser()
@@ -74,7 +74,7 @@ global_top_df = pd.DataFrame()
 full_sa_list = get_full_way_sa(args.fips_num)
 sa_list = full_sa_list[args.sa_index::10]
 
-for sa in sa_list[:1]:
+for sa in sa_list:
     alc = Alloc(fips_num = args.fips_num, obj_type = 'all', alg='reg_age', B=args.B, num_alloc = num_alloc, point_index = args.point_index)
     alc.init_param_list  = sa
     print(sa)
