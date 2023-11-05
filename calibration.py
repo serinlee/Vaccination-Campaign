@@ -74,7 +74,7 @@ def run_code_parallel(obj_function, fips_num, param_update_lists):
     import multiprocess as mp
     with mp.Pool(mp.cpu_count()) as pool:
         results = pool.starmap(obj_function, [(fips_num, param_list) for param_list in param_update_lists])
-    return results 
+    return results
 
 def run_calibration(fips_num, n_trials, nrep):
     x_name = ['overall_alpha','beta','prop_sus','O_m','p1','p2','p3','p4','p5','rae','k_R','k_E','lam','vaccine_risk']
@@ -114,7 +114,7 @@ def run_calibration(fips_num, n_trials, nrep):
     df_final = df_final.sort_values(by='final_score')
     return df_final
 
-def get_best_result(fips_num, index_list, sort_by='final_score'):
+def get_best_result(fips_num, index_list, date, sort_by='final_score', t = np.linspace(0, 358, 359)):
     result_df = pd.read_csv(f'Calibration_Result/{fips_num}_calib_result_n_50000_date_{date}.csv')
     x_name = ['overall_alpha','beta','prop_sus','O_m','p1','p2','p3','p4','p5','rae','k_R','k_E','lam', 'vaccine_risk']
     # weights = {'vacc_score': 0.5, 'dead_score': 0.1, 'inf_score': 0.1}
@@ -129,7 +129,6 @@ def get_best_result(fips_num, index_list, sort_by='final_score'):
         for j in range(len(x_name)):
             x_set = (x_name[j], result_df.iloc[i][x_name[j]])
             param_tuple_list.append(x_set)
-        t = np.linspace(0, 358, 359)
         model = VaccineModel(fips_num, init_param_list = param_tuple_list, t_f= t)
         ret = odeint(model.run_model, model.get_y0(), t)
         # print(get_calib_score_MSE(model, ret))
@@ -142,7 +141,7 @@ def get_best_result(fips_num, index_list, sort_by='final_score'):
 #  %%
 if __name__ == '__main__':
     import argparse
-    n_trials = 500
+    n_trials = 50000
     date = '1030'
     nrep = 1234
     parser = argparse.ArgumentParser()

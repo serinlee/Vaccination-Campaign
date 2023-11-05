@@ -4,11 +4,30 @@ from alloc import Alloc
 import numpy as np
 import pandas as pd
 
+def get_full_way_sa(fips):
+    # Upper, lower bound, and number of trials
+    fips_list = [53047, 53033]
+    fips_ind = fips_list.index(fips)
+    vr_list = np.linspace(0, 0.0001, 5)
+    kr_list = np.linspace(5000, 10000, 5)
+    ke_list = [np.linspace(1,5,5), np.linspace(5,15,5)][fips_ind]
+    p_list = np.linspace(0,1,5)
+
+    sa_list = []
+    for p in p_list:
+        for k_R in kr_list:
+            for k_E in ke_list:
+                for vr in vr_list:
+                    init_param_list = [("p1", p),("p2", p),("p3",p),("p4", p),("p5", p), 
+                                       ("vaccine_risk", vr), ("k_R",k_R), ("k_E", k_E)]
+                    sa_list.append(init_param_list)
+    return sa_list
+
 def get_combined_param_update_bounds():
     # Upper, lower bound, and number of trials
     combined_param_update_bounds = [
-        [("vaccine_risk", 0, 1, 11)],
-        [("k_R", 0.1, 30, 11)],
+        [("vaccine_risk", 0, 0.0001, 11)],
+        [("k_R", 0.1*5000, 30*5000, 11)],
         [("k_E", 0.1, 30, 11)],
         [("overall_alpha", 0.0001, 0.001, 11)],
         [("beta", 1, 10, 11)],
@@ -38,7 +57,7 @@ def extract_values_from_filepath(filepath):
     else:
         return None
 #%% 
-date = '1025'
+date = '1104'
 num_alloc = 1
 
 import argparse
@@ -50,12 +69,14 @@ parser.add_argument('-i', '--sa_index', type=int, help='SA index')
 args = parser.parse_args()
 
 global_top_df = pd.DataFrame()
-param_bounds = get_combined_param_update_bounds()[args.sa_index]
-sa_list = get_sa_list(param_bounds)
+# param_bounds = get_combined_param_update_bounds()[args.sa_index]
+# sa_list = get_sa_list(param_bounds)
+full_sa_list = get_full_way_sa(args.fips_num)
+sa_list = full_sa_list[args.sa_index::10]
 
-for sa in sa_list:
+for sa in sa_list[:1]:
     alc = Alloc(fips_num = args.fips_num, obj_type = 'all', alg='reg_age', B=args.B, num_alloc = num_alloc, point_index = args.point_index)
-    alc.param_update_list  = [sa]
+    alc.init_param_list  = sa
     print(sa)
     alloc_test = alc.get_alloc_list()
     alc.run_code(parallel=True, alloc_list = alloc_test, save_result = False)
@@ -64,7 +85,7 @@ for sa in sa_list:
     for outcome_metric in outcome_list:
         (top_reg, top_age, alloc_test) = alc.get_alloc_top_age_reg(alc.sol_history, outcome_metric)
         alc = Alloc(fips_num = args.fips_num, obj_type = outcome_metric, alg='reg_age', B=args.B, num_alloc = num_alloc, point_index = args.point_index)
-        alc.param_update_list  = [sa]
+        alc.init_param_list  = sa
         alc.run_code(parallel=True, alloc_list = alloc_test)
         final_df = pd.concat([top_reg, top_age, alc.sol_history], ignore_index = True)
         top_df = final_df.sort_values(outcome_metric, ascending = False if 'cost' in outcome_metric else True).iloc[:1]

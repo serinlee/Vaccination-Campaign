@@ -173,6 +173,8 @@ class VaccineModel:
         # self.check_range(range_rational, range_emotional)
 
         eta = (1 - self.p) * R_eta + self.p * E_eta
+        # if t>60 and round(t%10)==0:
+        #     print(self.p[0], round(np.mean(R_eta), 2), round(np.mean(E_eta), 2), round(np.mean(eta), 2))
 
         opi_AP_lam = np.zeros(self.num_group)
         if t < self.t_c[-1]:

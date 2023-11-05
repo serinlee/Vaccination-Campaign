@@ -4,6 +4,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import geopandas as gpd
 from alloc import *
+import plot
 
 king = VaccineModel(53033)
 clark = VaccineModel(53011)
@@ -72,7 +73,7 @@ plt.title('Population proportion')
 plt.show()
 
 # %% Analyze allocation results
-date = '1025'
+date = '1030'
 df = pd.read_csv(f'top_results_final_{date}.csv')
 grouped = df.groupby(['fips', 'obj'])
 result = grouped.apply(lambda x: x.select_dtypes(include=['number']).mean())
@@ -238,7 +239,7 @@ plt.savefig(f'Plot/Pareto_{County_name.get(str(df.iloc[0].fips))}.png', transpar
 plt.show()
 
 # %% Get default policy
-date = '1025'
+date = '1030'
 result = pd.read_pickle(f'refined_result_{date}.pkl')
 result = result[result['obj']!='no_policy']
 df = result.copy()
@@ -246,8 +247,8 @@ fips_list = [53033, 53047]
 for fips in fips_list:
     row = df[(df['fips']==fips) & (df['obj']=='cost_deaths_0')]
     ret_list =[]
-    # deaths = []
-    # vacc = []
+    deaths = []
+    vacc = []
     for i in range(5):
         alc = Alloc(fips_num = row['fips'].values[0], obj_type = 'all', alg='reg_age', B=[10000, 200][fips_list.index(fips)], num_alloc = 20, point_index = i)
         ret_list.append(alc.run_code(parallel=False, 
@@ -260,29 +261,32 @@ for fips in fips_list:
     
     # ret_list = np.array(ret_list).reshape((10, 365, 200))
 
-#     deaths = np.mean(deaths, axis=0)
-#     vacc = np.mean(vacc, axis=0)
-#     new_row = pd.DataFrame([[alc.fips_num, 'no_policy_0', np.sum(deaths), np.max(np.abs(deaths/np.mean(deaths)-1)),np.sum(vacc), np.max(np.abs(vacc/np.mean(vacc)-1)), np.zeros(25), deaths, vacc ]], columns = ['fips','obj','cost_deaths_0','disparity_deaths_0','cost_vacc_0','disparity_vacc_0','alloc','benefits_deaths','benefits_vacc'])
-#     result = pd.concat([new_row, result])
-# result.to_pickle(f'Result/refined_result_with_no_policy_{date}.pkl')
+    deaths = np.mean(deaths, axis=0)
+    vacc = np.mean(vacc, axis=0)
+    new_row = pd.DataFrame([[alc.fips_num, 'no_policy_0', np.sum(deaths), np.max(np.abs(deaths/np.mean(deaths)-1)),np.sum(vacc), np.max(np.abs(vacc/np.mean(vacc)-1)), np.zeros(25), deaths, vacc ]], columns = ['fips','obj','cost_deaths_0','disparity_deaths_0','cost_vacc_0','disparity_vacc_0','alloc','benefits_deaths','benefits_vacc'])
+    result = pd.concat([new_row, result])
+result.to_pickle(f'Result/refined_result_with_no_policy_{date}.pkl')
+result.to_csv(f'Result/refined_result_with_no_policy_{date}.csv')
     
 # %%
 
 file_path = f'Result/refined_result_with_no_policy_{date}.pkl'
 df = pd.read_pickle(file_path)
-rows = df[(df['fips']==53047)]
+rows = df[(df['fips']==53033)]
 
 glob_ret_best = []
 for index, row in rows.iterrows():
     ret_list_no = []
     ret_list_best = []
-    for i in [8]:
-        for alloc in ([row['alloc']]):
+    for i in range(5):
+        # for alloc in ([row['alloc']]):
         # for alloc in ([row['alloc'].values[0], np.zeros(25)]):
             alc = Alloc(fips_num = row['fips'], obj_type = 'all', alg='reg_age', B=100, num_alloc = 20, point_index = i)
             alc.model = VaccineModel(alc.fips_num, init_param_list = alc.init_param_list, 
                                         param_update_list=alc.param_update_list)
             t = alc.model.t_f
+            t = np.linspace(0, 199, 200)
+            alloc = row['alloc']
             alc.model.update_param("U", alloc)
             ret = odeint(alc.model.run_model, alc.model.get_y0(), t)
             ret_list_best.append(ret)
@@ -292,150 +296,38 @@ for index, row in rows.iterrows():
     ret_mean_best = np.mean(ret_list_best, axis=0)
     glob_ret_best.append(ret_mean_best)
     # plot.plot_results_with_calib(alc.model, t, [ret_mean_no, ret_mean_best], lw=1.5, error_bar = True)
-plot_results_with_calib(alc.model, t, glob_ret_best, lw=1.5, error_bar = True, filename='Plot_53047')
+plot_results_with_calib(alc.model, t, ret_list_best, lw=1.5, error_bar = True, filename='Plot_53047')
 # plot.plot_results_with_calib(alc.model, t, ret_list, lw=0.5, error_bar = True)
 # %%
 
-def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filename=None, title=''):
-    import plot
-    data_date = model.data_date
-    data_anti_prop = model.data_anti_prop
-    death_rate_range = model.death_rate_range
-    data_death = model.data_death
-    data_inf_prop = model.data_inf_prop
-    inf_rate_range = model.inf_rate_range
-    vacc_rate_range = model.vacc_rate_range
-    num_group = model.num_group
-
-    c_list = ['grey', 'r', 'b', 'g', 'orange']
-    l_list = ['-',(0,(5,1)), '--',':','-.','dashed']
-    l_list = ['-']*30
-    marker_list = ['o','s','D','^','v']
-    marker_list = ['']*10
-
-    c_list = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', 
-              '#bcbd22', '#17becf', '#1a9850', '#66a61e', '#a6cee3', '#fdbf6f', '#fb9a99', '#e31a1c', 
-              '#fb9a99', '#33a02c', '#b2df8a', '#a6cee3']
-
-    label = ["0-17", "18-64", "65+"]
-    policy_label = ['No campaign','Max_Deaths','Max_Vaccination','MMD_Deaths','MMD_Vaccination']
-    
-    fig, axes = plt.subplots(1, 3, figsize=(5 * 3, 4))
-
-    for idx, ret in enumerate(ret_list):
-        [SA, IA, RA, DA, SP, IP, RP, DP] = np.transpose(np.reshape(np.array(ret), (len(t), num_group, model.num_comp)))
-        I = IA + IP
-        A = SA + IA + RA
-        P = SP + IP + RP
-        N = A + P
-        D = DA + DP
-        A_int_by_age = plot.get_age_calib_val(model, A)
-        N_int_by_age = plot.get_age_calib_val(model, N)
-        print(round((1-sum(A[:,-1])/sum(N[:,-1]))*100,3))
-        for i in range(len(data_anti_prop)):
-            axes[0].plot(t, 100 * (1 - A_int_by_age[i] / N_int_by_age[i]),
-                        #  label=f'Simulated-Age {label[i]}' if idx == 0 else "", color=c_list[i],
-                        #  label= policy_label[idx] if i == 0 else "", 
-                         label= idx if i == 0 else "", 
-                         color=c_list[idx], linestyle = l_list[idx], marker = marker_list[idx], markevery=60+idx,
-                         linewidth=lw, alpha=1.0)
-            if error_bar and idx == 0:
-                color = ['r','b','g']
-                axes[0].errorbar(data_date, 100 * (1 - data_anti_prop[i]) * vacc_rate_range[0],
-                                 yerr=[np.ones(len(data_date)), np.ones(len(data_date))],
-                                #  yerr=[100 * (1 - data_anti_prop[i]) * (vacc_rate_range[0] - vacc_rate_range[1]),
-                                #        100 * (1 - data_anti_prop[i]) * (vacc_rate_range[2] - vacc_rate_range[0])],
-                                 fmt='o', ecolor=color[i], color=color[i], capsize=5, markersize=3)
-                                #  label=f'Observed data (Age {label[i]})')
-            elif not error_bar and idx == 0:
-                axes[0].plot(data_date, 100 * (1 - data_anti_prop[i]) * vacc_rate_range[0], color=c_list[i], marker='o')
-                            #  linestyle='', label=f'Observed data (Age {label[i]})')
-
-        axes[2].plot(t, sum(D), color=c_list[idx], linewidth=lw, alpha=1.0, linestyle = l_list[idx],marker = marker_list[idx],markevery=60+idx,
-                    label= idx)
-                    # label= policy_label[idx])
-                    #  label="Simulation Results" if idx == 0 else "")
-        axes[1].plot(t, 100 * sum(I) / sum(N), color=c_list[idx], linewidth=lw, alpha=1.0, linestyle = l_list[idx],marker = marker_list[idx],markevery=60+idx,
-                    label= idx)
-                    # label= policy_label[idx])
-                    #  label="Simulation Results" if idx == 0 else "")
-
-        if error_bar and idx == 0:
-            axes[2].errorbar(data_date, data_death * death_rate_range[0],
-                             yerr=[data_death * (death_rate_range[0] - death_rate_range[1]),
-                                   data_death * (death_rate_range[2] - death_rate_range[0])],
-                             fmt='o', capsize=5, markersize=3)
-            # label='Observed data')
-            axes[1].errorbar(data_date, 100 * data_inf_prop / inf_rate_range[0],
-                             yerr=[100 * data_inf_prop * (1 / inf_rate_range[2] - 1 / inf_rate_range[0]),
-                                   100 * data_inf_prop * (1 / inf_rate_range[0] - 1 / inf_rate_range[1])],
-                             fmt='o', capsize=5, markersize=3)
-                            #  , label='Observed data')
-        elif not error_bar and idx == 0:
-            axes[2].plot(data_date, data_death * death_rate_range[0], marker='o', linestyle='')
-                        #  label='Observed data')
-            axes[1].plot(data_date, 100 * data_inf_prop / inf_rate_range[0], marker='o', linestyle='')
-                        #  label='Estimated data')
-
-    for ax in axes:
-        ax.set_xlabel("Month")
-        # ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.5), fancybox=True, shadow=True, ncol=2)    
-        if t[-1] <= model.t_c[-1]:
-            date = [i*7 for i in range(int(t[-1]/7))]
-            date_label_full = [i+1 for i in range(int(t[-1]/7))]
-            ax.set_xlabel("Week", fontsize=14)
-            ax.set_xticks(date)
-            ax.set_xticklabels(date_label_full[:len(date)], rotation=0)
-            ax.tick_params(axis='both', which='both', labelsize=10)  # Adjust the font size (12 is just an example)
-        else:
-            date = [i*30.5 for i in range(int(t[-1]/30.5))]
-            date_label_full = [i+1 for i in range(int(t[-1]/30.5))]
-            # date_label_full = ['Jan/23', 'Feb/23', 'Mar/23', 'Apr/23', 'May/23', 'Jun/23', 'Jul/23', 'Aug/23', 'Sep/23', 'Oct/23', 'Nov/23', 'Dec/23']
-            ax.set_xlabel("Month", fontsize=14)
-            ax.set_xticks(date)
-            ax.set_xticklabels(date_label_full[:len(date)], rotation=0)
-            ax.tick_params(axis='both', which='both', labelsize=10)  # Adjust the font size (12 is just an example)
-
-    axes[0].set_title('Vaccinated population', fontsize=14)
-    axes[1].set_title('Infectious population', fontsize=14)
-    axes[2].set_title('Dead population', fontsize=14)
-    axes[0].set_ylabel('Percentage (%)', fontsize=14)
-    axes[1].set_ylabel("Percentage (%)", fontsize=14)
-    axes[2].set_ylabel("Person", fontsize=14)
-    axes[0].set_ylim([0, 100])
-    # axes[2].set_ylim([0.0, 0.05 * 100])
-
-    # plt.legend(policy_label, title='Best campaign by objective', loc='upper center', bbox_to_anchor=(1.5, 0.8), fancybox=True, shadow=True, ncol=1) 
-    plt.legend([i for i in range(len(ret_list))], title='Best campaign by objective', loc='upper center', bbox_to_anchor=(1.5, 0.8), fancybox=True, shadow=True, ncol=1) 
-    
-    plt.suptitle(title, fontsize=18)
-    fig.tight_layout()
-    if filename is None:
-        plt.show()
-    else: plt.savefig(f"Plot/{filename}.png")
-
-# %%from sklearn.ensemble import RandomForestRegressor
+# %%
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import PolynomialFeatures
 import pandas as pd
-data = pd.read_csv('test.csv')
-data = data.applymap(strip_percentage_and_convert)
-data = data.dropna()
-X = data[['overall_alpha', 'beta', 'prop_sus', 'O_m', 'p1', 'p2', 'p3', 'p4','p5', 'rae', 'k_R', 'k_E', 'lam']]
-Y = data[['p1_d', 'p2_d', 'p3_d', 'p4_d','p5_d', 'p1_v', 'p2_v', 'p3_v']] 
+# data = pd.read_csv('top_results_final_1030.csv')
+# data = data[(data['fips']==53033) & (data['obj']=='cost_deaths_0')]
+data = data[(data['obj']=='disparity_vacc_0')]
+
+# data = data.applymap(strip_percentage_and_convert)
+# data = data.dropna()
+X = data[['overall_alpha', 'beta', 'prop_sus', 'O_m', 'p1', 'p2', 'p3', 'p4','p5', 'rae', 'k_R', 'k_E', 'lam','vaccine_risk']]
+# Y = data[['p1_d', 'p2_d', 'p3_d', 'p4_d', 'p5_d', 'p1_v', 'p2_v', 'p3_v']] 
+Y = data[[col for col in df.columns if col.startswith('alloc_')]]
+
 
 # Create interaction features for X
 poly = PolynomialFeatures(degree=1, interaction_only=True, include_bias=False)
 X_interactions = poly.fit_transform(X)
 
 # List of target columns
-target_column = ['p1_d', 'p2_d', 'p3_d', 'p4_d']
-target_column += ['p1_v', 'p2_v', 'p3_v']
+# target_column = ['p1_d', 'p2_d', 'p3_d', 'p4_d']
+# target_column += ['p1_v', 'p2_v', 'p3_v']
 
 # Initialize a Random Forest model
 model = RandomForestRegressor()
 
 # Fit the model to X with interaction features and the selected target columns
-model.fit(X_interactions, Y[target_column])
+model.fit(X_interactions, Y)
 
 # Get feature importances
 feature_importances = model.feature_importances_
@@ -446,3 +338,5 @@ sorted_features = sorted(zip(poly.get_feature_names_out(X.columns), feature_impo
 # Print feature importances
 for feature, importance in sorted_features:
     print(f"{feature}: {importance}")
+
+# %%
