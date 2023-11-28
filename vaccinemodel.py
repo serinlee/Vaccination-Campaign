@@ -54,11 +54,11 @@ class VaccineModel:
         self.rae = 229
         self.lam = 0.01942
         self.p_online = 0.0
-        self.vaccine_risk = 0.00005
-        self.k_R = 50000
+        self.vaccine_risk = 0.0
+        self.k_R = 6500
         fips_list = [53047, 53033]
         fips_ind = fips_list.index(fips_num)
-        self.k_E = [2.5, 10][fips_ind]
+        self.k_E = [2.5, 6.5][fips_ind]
 
         # Regional parameters
         self.num_age_group = 5
@@ -99,7 +99,7 @@ class VaccineModel:
         for param_name, param_value in self.init_param_list:
                 self.update_param(param_name, param_value)
         
-        self.min_rat, self.max_rat,self.min_emo, self.max_emo, self.mean_rat, self.mean_emo = 0,0,0,0,[],[]
+        self.min_rat, self.max_rat,self.min_emo, self.max_emo, self.mean_rat, self.mean_emo, self.mean_eta, self.eta_all = 0,0,0,0,[],[],[], []
 
 
     def get_lambda(self, beta, C, I, N):
@@ -119,17 +119,17 @@ class VaccineModel:
         if param_name in ["p1","p2","p3","p4","p5"]:
             existing_value = self.p.copy()
             self.p = self.get_p()
-            if self.debug == True: print(f"Changed p from {existing_value[:5]} to {self.p[:5]}")
+            if self.debug : print(f"Changed p from {existing_value[:5]} to {self.p[:5]}")
 
         if param_name in ["alpha_rr_by_age", "overall_alpha"]:
             existing_value = self.alpha.copy()
             self.alpha = self.get_alpha()
-            if self.debug == True: print(f"Changed alpha from {existing_value[:5]} to {self.alpha[:5]}")
+            if self.debug : print(f"Changed alpha from {existing_value[:5]} to {self.alpha[:5]}")
             
         if param_name == 'p_online':
             existing_value = self.O.copy()
             self.O = (self.p_online*self.opinion_online + (1-self.p_online)*self.opinion_physical)
-            if self.debug == True: print(f"Changed O from {existing_value[0][0]} to {self.O[0][0]}")
+            if self.debug : print(f"Changed O from {existing_value[0][0]} to {self.O[0][0]}")
 
 
     def update_param(self, param_name, param_value):
@@ -141,13 +141,15 @@ class VaccineModel:
         if self.debug == True: print(f"Changed {param_name} from {existing_value} to {getattr(self, param_name)}")
         self.check_dependency(param_name)
 
-    def check_range(self, range_rational, range_emotional):
+    def check_range(self, range_rational, range_emotional, eta, t):
         if(self.min_rat > np.min(range_rational)): self.min_rat = np.min(range_rational)
         if(self.max_rat < np.max(range_rational)): self.max_rat = np.max(range_rational)
         if(self.min_emo > np.min(range_emotional)): self.min_emo = np.min(range_emotional)
         if(self.max_emo < np.max(range_emotional)): self.max_emo = np.max(range_emotional)
         self.mean_rat.append(np.mean(range_rational))
         self.mean_emo.append(np.mean(range_emotional))
+        self.mean_eta.append([t,np.mean(eta)])
+        self.eta_all.append([t,(eta)])
 
     def run_model(self, y, t):
         if (not self.param_updated) and (t > self.t_c[-1]):
@@ -170,13 +172,11 @@ class VaccineModel:
 
         E_eta = np.array([1 / (1 + np.exp(-self.k_E * i)) for i in np.divide(np.subtract(P, A), N)])
 
-        # range_rational = np.subtract(C_P, C_A)
-        # range_emotional = np.divide(np.subtract(P, A), N)
-        # self.check_range(range_rational, range_emotional)
-
         eta = (1 - self.p) * R_eta + self.p * E_eta
-        # if t>60 and round(t%10)==0:
-        #     print(self.p[0], round(np.mean(R_eta), 2), round(np.mean(E_eta), 2), round(np.mean(eta), 2))
+        self.check_range(R_eta, E_eta, eta, t)
+
+        val = np.subtract(C_P, C_A)
+        # print(np.min(val), np.max(val))
 
         opi_AP_lam = np.zeros(self.num_group)
         if t < self.t_c[-1]:

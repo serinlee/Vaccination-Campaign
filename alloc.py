@@ -3,11 +3,11 @@ from vaccinemodel import *
 import warnings
 
 class Alloc:
-    def __init__(self, fips_num, alloc=None, point_index=-1, obj_type='', alg='', B=1000, num_alloc = 1, n_iter=0, param_update_list=[]):
+    def __init__(self, fips_num, alloc=None, init_param_list = [], point_index=-1, obj_type='', alg='', B=1000, num_alloc = 1, n_iter=0, param_update_list=[], debug=False):
         self.points = pd.read_csv(f'Data/{fips_num}_points_new.csv')
         self.point_index = point_index
         self.point = self.points.iloc[self.point_index]
-        self.init_param_list = []
+        self.init_param_list = init_param_list
         for i in range(len(self.point)):
             self.init_param_list.append((self.point.index[i], self.point[i]))
         self.fips_num = fips_num
@@ -27,14 +27,20 @@ class Alloc:
         self.n_iter = n_iter
         self.param_update_list = param_update_list
         self.ret_list = []
+        self.eta_list = []
+        self.all_eta_list = []
+        self.debug = debug
         
     # get outcomes
     def get_no_policy(self, save_result = False):
         self.model = VaccineModel(self.fips_num, init_param_list = self.init_param_list, 
-                                  param_update_list=self.param_update_list, debug = False)
+                                  param_update_list=self.param_update_list, debug = self.debug)
         t = self.model.t_f
         self.model.update_param("U", np.zeros(self.model.num_group))
         ret = odeint(self.model.run_model, self.model.get_y0(), t)
+        # print("No U init eta ", np.round(self.model.mean_eta[0],2), "last eta ", np.round(self.model.mean_eta[-1],2),
+        #       " init p_emo ", np.round(self.model.mean_emo[0],2), "last p_emo ", np.round(self.model.mean_emo[-1],2),
+        #                 " init p_rat ", np.round(self.model.mean_rat[0],2)," last p_rat ", np.round(self.model.mean_rat[-1],2))
         [SA, IA, RA, DA, SP, IP, RP, DP] = np.transpose(np.reshape(np.array(ret), (len(t), self.model.num_group, self.model.num_comp)))
         self.no_policy_outcome_deaths = DA[:, -1] + DP[:, -1]
         self.no_policy_outcome_vacc = SP[:,-1] + IP[:,-1] + RP[:,-1]
@@ -51,15 +57,14 @@ class Alloc:
 
     def run_alloc(self, alloc):
         self.model = VaccineModel(self.fips_num, init_param_list = self.init_param_list, 
-                                  param_update_list=self.param_update_list, debug = False)
+                                  param_update_list=self.param_update_list, debug = self.debug)
         t = self.model.t_f
         self.model.update_param("U", alloc)
         ret = odeint(self.model.run_model, self.model.get_y0(), t)
-        # print(self.model.mean_rat[::50])
-        # print(self.model.mean_emo[::50])
         [SA, IA, RA, DA, SP, IP, RP, DP] = np.transpose(np.reshape(np.array(ret), (len(t), self.model.num_group, self.model.num_comp)))
         self.ret_list.append(ret)
-
+        self.eta_list.append(self.model.mean_eta)
+        self.all_eta_list.append(self.model.eta_all)
         benefits_deaths = (self.no_policy_outcome_deaths -  (DA[:, -1] + DP[:, -1])).round(4)
         outcome_cost_fair_deaths, outcome_disparity_fair_deaths = self.calculate_outcome_metrics(benefits_deaths, alloc)
         benefits_vacc = ((SP[:,-1] + IP[:,-1] + RP[:,-1]) - self.no_policy_outcome_vacc).round(4)
@@ -140,12 +145,13 @@ class Alloc:
         result_df['mark'] = result_df.apply(mark_based_on_first_n_elements, axis=1)
         reg_df = result_df[result_df['mark']=='reg_based']
         age_df = result_df[result_df['mark']=='age_based']
-        top_reg = reg_df.nlargest(5, outcome_metric)
-        top_age = age_df.nlargest(5, outcome_metric) 
+        top_n = 10
+        top_reg = reg_df.nlargest(top_n, outcome_metric)
+        top_age = age_df.nlargest(top_n, outcome_metric) 
 
         if 'disparity' in outcome_metric:
-            top_reg = reg_df.nsmallest(5, outcome_metric)
-            top_age = age_df.nsmallest(5, outcome_metric)
+            top_reg = reg_df.nsmallest(top_n, outcome_metric)
+            top_age = age_df.nsmallest(top_n, outcome_metric)
 
         num_group = len(top_reg.iloc[0].alloc)
         tot_alloc = sum(top_reg.iloc[0].alloc)
@@ -154,8 +160,9 @@ class Alloc:
         for i in range(len(top_reg)):
             for j in range(len(top_age)):
                 alloc = np.array(top_reg.iloc[i].alloc)/tot_alloc * np.array(top_age.iloc[j].alloc)/tot_alloc
-                alloc = alloc/sum(alloc)*sum(top_reg.iloc[i].alloc)
-                alloc_list.append(alloc)
+                if sum(alloc) >0: 
+                    alloc = alloc/sum(alloc)*sum(top_reg.iloc[i].alloc)
+                    alloc_list.append(alloc)
 
         # Add vertex points as well
         alloc_list += self.get_vertex_alloc(num_group, tot_alloc)
@@ -216,7 +223,7 @@ class Alloc:
         if save_result:
             if parallel: 
                 warnings.warn("The 'save_result' option is not supported in parallel mode.")
-            return self.ret_list
+            return (self.ret_list, self.eta_list, self.all_eta_list)
 
 def organize_df(df, sort_by='disparity_deaths_0'):
     list_outcome = ['alloc', 'cost_deaths', 'disparity_deaths',  'cost_vacc', 'disparity_vacc', 'benefits_deaths', 'benefits_vacc']
@@ -246,11 +253,6 @@ if __name__ == '__main__':
     alc.run_code(parallel=True, alloc_list = alloc_test)
 
     result_file_path = f'Result/{alc.fips_num}_obj_{alc.obj_type}_alg_{alc.alg}_B_{alc.B}_point_{alc.point_index}_date_{date}'
-    # param_update = f'("{param_update_list[0][0]}", {param_update_list[0][1]})'
-    # param_update = None
-    # if param_update is not None:
-    #     result_file_path += f"_param_{param_update[0][0]}_{param_update[0][1]}"
-
     alc.sol_history.to_pickle(result_file_path)
     with np.printoptions(linewidth=1000):
         (alc.sol_history).to_csv(result_file_path)
