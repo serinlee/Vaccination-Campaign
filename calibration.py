@@ -113,28 +113,38 @@ def run_calibration(fips_num, n_trials, nrep):
     df_final = df_final.sort_values(by='final_score')
     return df_final
 
-def get_best_result(fips_num, index_list, date, sort_by='final_score', t = np.linspace(0, 358, 359)):
-    result_df = pd.read_csv(f'Calibration_Result/{fips_num}_calib_result_n_5000_date_{date}.csv')
+def get_best_result(fips_num=53033, index_list=[0], date='1105', sort_by='final_score', t = np.linspace(0, 364, 365)):
+    result_df = pd.read_csv(f'Calibration_Result/53033_calib_result_n_5000_date_1105_p_online_100.csv')
     x_name = ['overall_alpha','beta','prop_sus','O_m','rae','lam']
     # weights = {'vacc_score': 0.5, 'dead_score': 0.1, 'inf_score': 0.1}
     # result_df['weighted_sum'] = result_df.apply(lambda row: sum(row[score] * weight for score, weight in weights.items()), axis=1)
     # result_df = result_df.sort_values(by='weighted_sum')
     result_df = result_df.sort_values(sort_by)
     best_df = result_df.iloc[index_list]
-    best_df.to_csv(f'Data/{fips_num}_points_{date}.csv', index=False, columns = x_name)
+    # best_df.to_csv(f'Data/{fips_num}_points_new_100.csv', index=False, columns = x_name)
     rets = []
     for i in (index_list):
         param_tuple_list = []
         for j in range(len(x_name)):
-            x_set = (x_name[j], result_df.iloc[i][x_name[j]])
+            if x_name[j]=='O_m':
+                x_set = (x_name[j], result_df.iloc[i][x_name[j]]*np.array([0.5,0.5,0.2,0.2,3]*5))
+            else:
+                x_set = (x_name[j], result_df.iloc[i][x_name[j]])
             param_tuple_list.append(x_set)
+        # print(param_tuple_list)
+        param_tuple_list.append(('p_online', 1.0))
+        best_alloc = np.zeros(25)
+        best_alloc[24] = 10000
+        param_tuple_list.append(('U', best_alloc))
         model = VaccineModel(fips_num, init_param_list = param_tuple_list, t_f= t)
+        print(model.p_online, model.O_m)
         ret = odeint(model.run_model, model.get_y0(), t)
-        # print(get_calib_score_MSE(model, ret))
+        print(get_calib_score_MSE(model, ret))
         rets.append(ret)
     County_name = {53011: 'Clark County', 53033: 'King County', 53047: 'Okanogan County'}
     # f"Model results without policy in {County_name.get(fips_num)}" 
-    plot_results_with_calib(model, t, rets, error_bar=True, lw=1.5, filename=f'{fips_num}_calib', title=f"Model calibration to {County_name.get(fips_num)}")
+    plot_results_with_calib(model, t, rets, error_bar=True, lw=1.5, filename=f'{fips_num}_calib', title=f"Best calibration result in {County_name.get(fips_num)}, WA")
+    return model
     
 
 #  %%
@@ -147,4 +157,6 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--fips_num', type=int, help='FIPS number (region)')
     args = parser.parse_args()
     df_final = run_calibration(args.fips_num, n_trials, nrep)
-    df_final.to_csv(f'Calibration_Result/{args.fips_num}_calib_result_n_{n_trials}_date_{date}.csv')
+    df_final.to_csv(f'Calibration_Result/{args.fips_num}_calib_result_n_{n_trials}_date_{date}_p_online_50.csv')
+
+# %%

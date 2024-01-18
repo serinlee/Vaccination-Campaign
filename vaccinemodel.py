@@ -53,12 +53,12 @@ class VaccineModel:
         self.overall_alpha = 0.00025
         self.rae = 229
         self.lam = 0.01942
-        self.p_online = 0.0
-        self.vaccine_risk = 0.0
-        self.k_R = 6500
+        self.p_online = 0.5
+        self.vaccine_risk = 0.00015
+        self.k_R = 20000
         fips_list = [53047, 53033]
         fips_ind = fips_list.index(fips_num)
-        self.k_E = [2.5, 6.5][fips_ind]
+        self.k_E = [2.5, 15][fips_ind]
 
         # Regional parameters
         self.num_age_group = 5

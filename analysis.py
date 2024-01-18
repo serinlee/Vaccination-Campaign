@@ -7,25 +7,25 @@ from alloc import *
 import plot
 
 king = VaccineModel(53033)
-clark = VaccineModel(53011)
+# clark = VaccineModel(53011)
 okanogan = VaccineModel(53047)
 #%%
 C_impact = {'C_king_in': np.sum(king.C, axis=1), 'C_king_out': np.sum(king.C, axis=0),
-'C_clark_in': np.sum(clark.C, axis=1), 'C_clark_out': np.sum(clark.C, axis=0),
+# 'C_clark_in': np.sum(clark.C, axis=1), 'C_clark_out': np.sum(clark.C, axis=0),
 'C_okanogan_in': np.sum(okanogan.C, axis=1), 'C_okanogan_out': np.sum(okanogan.C, axis=0),
 }
 
 O_impact = {'O_king_in': np.sum(king.O, axis=1), 'O_king_out': np.sum(king.O, axis=0),
-'O_clark_in': np.sum(clark.O, axis=1), 'O_clark_out': np.sum(clark.O, axis=0),
+# 'O_clark_in': np.sum(clark.O, axis=1), 'O_clark_out': np.sum(clark.O, axis=0),
 'O_okanogan_in': np.sum(okanogan.O, axis=1), 'O_okanogan_out': np.sum(okanogan.O, axis=0),
 }
 
 init_pop = {'init_pop_king': king.N_by_group, 
-             'init_pop_clark':clark.N_by_group, 
+            #  'init_pop_clark':clark.N_by_group, 
              'init_pop_okanogan':okanogan.N_by_group,  }
 
 init_anti = {'init_anti_king': king.prop_anti*king.N_by_group, 
-             'init_anti_clark':clark.prop_anti*clark.N_by_group, 
+            #  'init_anti_clark':clark.prop_anti*clark.N_by_group, 
              'init_anti_okanogan':okanogan.prop_anti*okanogan.N_by_group,  }
 
 demo_df = pd.DataFrame(C_impact)

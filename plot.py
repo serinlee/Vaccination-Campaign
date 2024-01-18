@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from vaccinemodel import VaccineModel
 import numpy as np
 plt.rcdefaults()
+
 def plot_data_points(model):
     data_date = model.data_date
     data_anti_prop = model.data_anti_prop
@@ -19,11 +20,27 @@ def plot_data_points(model):
     anti_label = ['(Age 0-17)', '(Age 18-64)', '(Age 65+)']
     # Access the data_anti_prop attribute from the VaccineModel instance
     for i in range(len(data_anti_prop)):
-        axes[0].plot(data_date, 100*(1-data_anti_prop[i])*vacc_rate_range[0],
-                     color=c_list[i], marker='o', linestyle='', label='Target data ' + anti_label[i])
-    axes[1].plot(data_date,100*data_inf_prop/inf_rate_range[0], marker='o',linestyle='',label='Target data')
-    axes[2].plot(data_date, data_death*death_rate_range[0], marker='o',linestyle='',label='Target data')
-    
+        # axes[0].plot(data_date, 100*(1-data_anti_prop[i])*vacc_rate_range[0],
+        #              color=c_list[i], marker='o', linestyle='', label='Target data ' + anti_label[i])
+        axes[0].errorbar(data_date, 100 * (1 - data_anti_prop[i]) * vacc_rate_range[0],
+                            # yerr=[np.ones(len(data_date)), np.ones(len(data_date))],
+                            yerr=[100 * (1 - data_anti_prop[i]) * (vacc_rate_range[0] - vacc_rate_range[1]),
+                                  100 * (1 - data_anti_prop[i]) * (vacc_rate_range[2] - vacc_rate_range[0])],
+                            fmt='o', ecolor=c_list[i], color=c_list[i], capsize=5, markersize=3,label='Target data ' + anti_label[i])
+
+    # axes[1].plot(data_date,100*data_inf_prop/inf_rate_range[0], marker='o',linestyle='',label='Target data')
+    # axes[2].plot(data_date, data_death*death_rate_range[0], marker='o',linestyle='',label='Target data')
+
+    axes[2].errorbar(data_date, data_death * death_rate_range[0],
+                        yerr=[data_death * (death_rate_range[0] - death_rate_range[1]),
+                            data_death * (death_rate_range[2] - death_rate_range[0])],
+                        fmt='o', capsize=5, markersize=3,label='Target data')
+    # label='Observed data')
+    axes[1].errorbar(data_date, 100 * data_inf_prop / inf_rate_range[0],
+                        yerr=[100 * data_inf_prop * (1 / inf_rate_range[2] - 1 / inf_rate_range[0]),
+                            100 * data_inf_prop * (1 / inf_rate_range[0] - 1 / inf_rate_range[1])],
+                        fmt='o', capsize=5, markersize=3,label='Target data')
+
     for ax in axes:
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.5), fancybox=True, shadow=True, ncol=2)
         # ax.set_xlabel("Days")
@@ -36,16 +53,17 @@ def plot_data_points(model):
         ax.set_xticklabels(date_label_full[:len(date)], rotation=0)
         ax.tick_params(axis='both', which='both', labelsize=10)  # Adjust
 
-    # axes[2].set_title('Dead population')
-    # axes[0].set_ylabel('Vaccinated population (%)')
-    # axes[1].set_ylabel("Infectious population (%)")
+    axes[0].set_title('Vaccinated population by age group', fontsize=14)
+    axes[1].set_title('Infectious population', fontsize=14)
+    axes[2].set_title('Dead population', fontsize=14)
     
-    axes[0].set_ylabel("Vaccinated population (%)")
-    axes[1].set_ylabel("Infectious population (%)")
-    axes[2].set_ylabel("Dead population")
+    axes[0].set_ylabel("Percentage (%)", fontsize=14)
+    axes[1].set_ylabel("Percentage (%)", fontsize=14)
+    axes[2].set_ylabel("Person", fontsize=14)
+
     axes[0].set_ylim([0, 100])
     axes[1].set_ylim([0.0, 0.05*100])
-    plt.suptitle("Target Data by Health Outcomes")
+    plt.suptitle("Target Data in King County, WA", fontsize=18)
     fig.tight_layout()
     plt.savefig(f"Plot/Target_{str(model.reg)}.png")
     # plt.show()
@@ -92,13 +110,13 @@ def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filenam
         D = DA + DP
         A_int_by_age = plot.get_age_calib_val(model, A)
         N_int_by_age = plot.get_age_calib_val(model, N)
-        print(round((1-sum(A[:,-1])/sum(N[:,-1]))*100,3), int(sum(D[:,-1])))
+        print(round((1-sum(A[:,0])/sum(N[:,0]))*100,3), round((1-sum(A[:,56])/sum(N[:,56]))*100,3), round((1-sum(A[:,-1])/sum(N[:,-1]))*100,3), int(sum(D[:,-1])))
         for i in range(len(data_anti_prop)):
             axes[0].plot(t, 100 * (1 - A_int_by_age[i] / N_int_by_age[i]),
                         #  label=f'Simulated-Age {label[i]}' if idx == 0 else "", color=c_list[i],
                         #  label= policy_label[idx] if i == 0 else "", 
                          label= idx if i == 0 else "", 
-                         color=c_list[idx], linestyle = l_list[idx], marker = marker_list[idx], markevery=60+idx,
+                         color='grey',  linestyle = l_list[idx], marker = marker_list[idx], markevery=60+idx,
                          linewidth=lw, alpha=1.0)
             if error_bar and idx == 0 and includedata:
                 color = ['r','b','g']
@@ -109,14 +127,14 @@ def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filenam
                                  fmt='o', ecolor=color[i], color=color[i], capsize=5, markersize=3)
                                 #  label=f'Observed data (Age {label[i]})')
             elif not error_bar and idx == 0 and includedata:
-                axes[0].plot(data_date, 100 * (1 - data_anti_prop[i]) * vacc_rate_range[0], color=c_list[i], marker='o')
+                axes[0].plot(data_date, 100 * (1 - data_anti_prop[i]) * vacc_rate_range[0], color='grey', marker='o')
                             #  linestyle='', label=f'Observed data (Age {label[i]})')
 
-        axes[2].plot(t, sum(D), color=c_list[idx], linewidth=lw, alpha=1.0, linestyle = l_list[idx],marker = marker_list[idx],markevery=60+idx,
+        axes[2].plot(t, sum(D), color='grey', linewidth=lw, alpha=1.0, linestyle = l_list[idx],marker = marker_list[idx],markevery=60+idx,
                     label= idx)
                     # label= policy_label[idx])
                     #  label="Simulation Results" if idx == 0 else "")
-        axes[1].plot(t, 100 * sum(I) / sum(N), color=c_list[idx], linewidth=lw, alpha=1.0, linestyle = l_list[idx],marker = marker_list[idx],markevery=60+idx,
+        axes[1].plot(t, 100 * sum(I) / sum(N), color='grey', linewidth=lw, alpha=1.0, linestyle = l_list[idx],marker = marker_list[idx],markevery=60+idx,
                     label= idx)
                     # label= policy_label[idx])
                     #  label="Simulation Results" if idx == 0 else "")
@@ -157,17 +175,19 @@ def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filenam
             ax.set_xticklabels(date_label_full[:len(date)], rotation=0)
             ax.tick_params(axis='both', which='both', labelsize=10)  # Adjust the font size (12 is just an example)
 
-    axes[0].set_title('Vaccinated population', fontsize=14)
+    axes[0].set_title('Vaccinated population by age group', fontsize=14)
     axes[1].set_title('Infectious population', fontsize=14)
     axes[2].set_title('Dead population', fontsize=14)
-    axes[0].set_ylabel('Percentage (%)', fontsize=14)
+    
+    axes[0].set_ylabel("Percentage (%)", fontsize=14)
     axes[1].set_ylabel("Percentage (%)", fontsize=14)
     axes[2].set_ylabel("Person", fontsize=14)
+
     axes[0].set_ylim([0, 100])
     # axes[2].set_ylim([0.0, 0.05 * 100])
 
     # plt.legend(policy_label, title='Best campaign by objective', loc='upper center', bbox_to_anchor=(1.5, 0.8), fancybox=True, shadow=True, ncol=1) 
-    plt.legend([i for i in range(len(ret_list))], title='Best campaign by objective', loc='upper center', bbox_to_anchor=(1.5, 0.8), fancybox=True, shadow=True, ncol=1) 
+    # plt.legend([i for i in range(len(ret_list))], title='Best campaign by objective', loc='upper center', bbox_to_anchor=(1.5, 0.8), fancybox=True, shadow=True, ncol=1) 
     
     plt.suptitle(title, fontsize=18)
     fig.tight_layout()
@@ -300,7 +320,7 @@ def plot_results_with_calib_one_plot(model, t, ret_list,to_plot='vacc', error_ba
             ax.set_xticklabels(date_label_full[:len(date)], rotation=0)
             ax.tick_params(axis='both', which='both', labelsize=10)  # Adjust the font size (12 is just an example)
 
-    plt.legend()
+    # plt.legend()
     # plt.legend(policy_label, title='Best campaign by objective', loc='upper center', bbox_to_anchor=(1.5, 0.8), fancybox=True, shadow=True, ncol=1) 
     # plt.legend([i for i in range(len(ret_list))], title='Best campaign by objective', loc='upper center', bbox_to_anchor=(1.5, 0.8), fancybox=True, shadow=True, ncol=1) 
     
