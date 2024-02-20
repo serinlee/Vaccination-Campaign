@@ -1,1 +1,1 @@
-This repository contains the code for the paper, 'Tailoring Vaccination Campaigns to Societal Factors in Vaccination Behavior'
+This repository contains the data and code for the paper, 'Optimizing Vaccination Campaign Strategies Considering Societal Characteristics'.
