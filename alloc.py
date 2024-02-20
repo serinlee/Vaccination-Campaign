@@ -165,7 +165,7 @@ class Alloc:
                     alloc_list.append(alloc)
 
         # Add vertex points as well
-        alloc_list += self.get_vertex_alloc(num_group, tot_alloc)
+        # alloc_list += self.get_vertex_alloc(num_group, tot_alloc)
         alloc_list = np.unique(np.array(alloc_list), axis=0)
         return (top_reg, top_age, alloc_list)
     

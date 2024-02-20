@@ -34,14 +34,12 @@ class VaccineModel:
     def get_p(self):
         return (np.array([self.p1,self.p2,self.p3,self.p4,self.p5]*self.num_reg_group))
 
-
     def __init__(self, fips_num=53033,init_param_list = [], param_update_list = [], t_f= np.linspace(0, 364, 365), debug=False):
         # Baseline parameters
         self.t_c = np.linspace(0, 58, 59)
         self.calib_period = 59
         self.t_f = t_f
         self.beta = 1.67
-        self.O_m = 3.36
         self.num_disease = 4
         self.num_vacc_group = 2
         self.num_comp = 8
@@ -53,12 +51,13 @@ class VaccineModel:
         self.overall_alpha = 0.00025
         self.rae = 229
         self.lam = 0.01942
-        self.p_online = 0.5
+        self.p_online = 0.0
         self.vaccine_risk = 0.00015
         self.k_R = 20000
         fips_list = [53047, 53033]
         fips_ind = fips_list.index(fips_num)
         self.k_E = [2.5, 15][fips_ind]
+        self.O_m = 1
 
         # Regional parameters
         self.num_age_group = 5
@@ -112,7 +111,8 @@ class VaccineModel:
         lam = np.zeros(len(C))
         for i in range(len(C)):
             for j in range(len(C)):
-                lam[i] += C[i][j] * beta[j] * eff_N[j]
+                # lam[i] += C[i][j] * beta[j] * eff_N[j]
+                lam[i] += C[i][j] * beta[i] * eff_N[j]
         return lam
 
     def check_dependency(self, param_name):

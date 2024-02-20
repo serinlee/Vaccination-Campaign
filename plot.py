@@ -88,7 +88,6 @@ def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filenam
 
     c_list = ['grey', 'r', 'b', 'g', 'orange']
     l_list = ['-',(0,(5,1)), '--',':','-.','dashed']
-    l_list = ['-']*300
     marker_list = ['o','s','D','^','v']
     marker_list = ['']*300
 
@@ -99,7 +98,7 @@ def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filenam
     label = ["0-17", "18-64", "65+"]
     policy_label = ['No campaign','Max_Deaths','Max_Vaccination','MMD_Deaths','MMD_Vaccination']
     
-    fig, axes = plt.subplots(1, 3, figsize=(5 * 3, 4))
+    fig, axes = plt.subplots(1, 3, figsize=(5 * 3, 5))
 
     for idx, ret in enumerate(ret_list):
         [SA, IA, RA, DA, SP, IP, RP, DP] = np.transpose(np.reshape(np.array(ret), (len(t), num_group, model.num_comp)))
@@ -112,44 +111,46 @@ def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filenam
         N_int_by_age = plot.get_age_calib_val(model, N)
         print(round((1-sum(A[:,0])/sum(N[:,0]))*100,3), round((1-sum(A[:,56])/sum(N[:,56]))*100,3), round((1-sum(A[:,-1])/sum(N[:,-1]))*100,3), int(sum(D[:,-1])))
         for i in range(len(data_anti_prop)):
+            color = ['r','b','g']
             axes[0].plot(t, 100 * (1 - A_int_by_age[i] / N_int_by_age[i]),
-                        #  label=f'Simulated-Age {label[i]}' if idx == 0 else "", color=c_list[i],
+                         label=f'Simulation Results (Age {label[i]})' if idx == 0 else "", 
+                        #  color=color[i],
                         #  label= policy_label[idx] if i == 0 else "", 
-                         label= idx if i == 0 else "", 
-                         color='grey',  linestyle = l_list[idx], marker = marker_list[idx], markevery=60+idx,
+                        #  label= idx if i == 0 else "", 
+                         color='grey',  
+                         linestyle = l_list[2-i], marker = marker_list[idx], markevery=60+idx,
                          linewidth=lw, alpha=1.0)
             if error_bar and idx == 0 and includedata:
-                color = ['r','b','g']
                 axes[0].errorbar(data_date, 100 * (1 - data_anti_prop[i]) * vacc_rate_range[0],
                                  yerr=[np.ones(len(data_date)), np.ones(len(data_date))],
                                 #  yerr=[100 * (1 - data_anti_prop[i]) * (vacc_rate_range[0] - vacc_rate_range[1]),
                                 #        100 * (1 - data_anti_prop[i]) * (vacc_rate_range[2] - vacc_rate_range[0])],
-                                 fmt='o', ecolor=color[i], color=color[i], capsize=5, markersize=3)
-                                #  label=f'Observed data (Age {label[i]})')
+                                 fmt='o', ecolor=color[i], color=color[i], capsize=5, markersize=3,
+                                 label=f'Observed data (Age {label[i]})')
             elif not error_bar and idx == 0 and includedata:
-                axes[0].plot(data_date, 100 * (1 - data_anti_prop[i]) * vacc_rate_range[0], color='grey', marker='o')
-                            #  linestyle='', label=f'Observed data (Age {label[i]})')
+                axes[0].plot(data_date, 100 * (1 - data_anti_prop[i]) * vacc_rate_range[0], color='grey', marker='o',
+                             linestyle='', label=f'Observed data (Age {label[i]})')
 
         axes[2].plot(t, sum(D), color='grey', linewidth=lw, alpha=1.0, linestyle = l_list[idx],marker = marker_list[idx],markevery=60+idx,
-                    label= idx)
+                    # label= idx,
                     # label= policy_label[idx])
-                    #  label="Simulation Results" if idx == 0 else "")
+                    label="Simulation Results" if idx == 0 else "")
         axes[1].plot(t, 100 * sum(I) / sum(N), color='grey', linewidth=lw, alpha=1.0, linestyle = l_list[idx],marker = marker_list[idx],markevery=60+idx,
-                    label= idx)
+                    # label= idx
                     # label= policy_label[idx])
-                    #  label="Simulation Results" if idx == 0 else "")
+                    label="Simulation Results" if idx == 0 else "")
 
         if error_bar and idx == 0 and includedata:
             axes[2].errorbar(data_date, data_death * death_rate_range[0],
                              yerr=[data_death * (death_rate_range[0] - death_rate_range[1]),
                                    data_death * (death_rate_range[2] - death_rate_range[0])],
-                             fmt='o', capsize=5, markersize=3)
-            # label='Observed data')
+                             fmt='o', capsize=5, markersize=3,
+            label='Observed data')
             axes[1].errorbar(data_date, 100 * data_inf_prop / inf_rate_range[0],
                              yerr=[100 * data_inf_prop * (1 / inf_rate_range[2] - 1 / inf_rate_range[0]),
                                    100 * data_inf_prop * (1 / inf_rate_range[0] - 1 / inf_rate_range[1])],
-                             fmt='o', capsize=5, markersize=3)
-                            #  , label='Observed data')
+                             fmt='o', capsize=5, markersize=3,
+                             label='Observed data')
         elif not error_bar and idx == 0 and includedata:
             axes[2].plot(data_date, data_death * death_rate_range[0], marker='o', linestyle='')
                         #  label='Observed data')
@@ -157,9 +158,8 @@ def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filenam
                         #  label='Estimated data')
 
     for ax in axes:
-        ax.set_xlabel("Month")
-        # ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.5), fancybox=True, shadow=True, ncol=2)    
-        if t[-1] <= model.t_c[-1]:
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.5), fancybox=True, shadow=True, ncol=2)    
+        if t[-1] <= 100:
             date = [i*7 for i in range(int(t[-1]/7))]
             date_label_full = [i+1 for i in range(int(t[-1]/7))]
             ax.set_xlabel("Week", fontsize=14)
@@ -342,7 +342,7 @@ def plot_results_with_calib_old(model, t, ret_list, error_bar=False, lw=0.5, fil
 
     c_list = ['r', 'b', 'g', 'grey', 'orange']
     
-    fig, axes = plt.subplots(1, 3, figsize=(5 * 3, 6))
+    fig, axes = plt.subplots(1, 3, figsize=(5 * 3, 5.5))
 
     for idx, ret in enumerate(ret_list):
 
