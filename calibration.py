@@ -1,4 +1,3 @@
-
 #%%
 from vaccinemodel import *
 from plot import *
@@ -76,7 +75,8 @@ def run_code_parallel(obj_function, fips_num, param_update_lists):
     return results
 
 def run_calibration(fips_num, n_trials, nrep):
-    x_name = ['overall_alpha','beta','prop_sus','O_m','rae','lam']
+    # x_name = ['overall_alpha','beta','prop_sus','O_m','rae','lam']
+    x_name = ['overall_alpha','beta','prop_sus','O_m', 'rae','lam','k_R','k_E','vaccine_risk']
     x_dim = len(x_name)
     overall_alpha_range = [0.0001,0.0002] 
     beta_range = [1.5, 3.5] # default: 2.0
@@ -84,13 +84,14 @@ def run_calibration(fips_num, n_trials, nrep):
     O_m_range = [1, 10] # default: 0.5
     lam_range = [0.01, 0.05] # default: 0.25
     rae_range = [150, 250] # default: 200
+    k_r_range = [10000, 30000]
+    k_e_range = [5, 20]
+    v_r_range = [0, 0.0003]
+    # p_range = [0,1]
 
-    # p_range = [0.001, 0.999] # default: 0.5
-    # vaccine_risk_range = [0, 0.0001] # default: 0.
-    # k_R_range = [10*5000, 30*5000] 
-    # k_E_range = [10, 30]
+    x_list = np.array([overall_alpha_range,beta_range,prop_sus_range, O_m_range, rae_range, lam_range, k_r_range, k_e_range, v_r_range])
+    # x_list = np.array([overall_alpha_range,beta_range,prop_sus_range, O_m_range, rae_range, lam_range])
 
-    x_list = np.array([overall_alpha_range,beta_range,prop_sus_range, O_m_range, rae_range, lam_range])
     x_l = x_list[:,0]
     x_u = x_list[:,1]
     obj_function = vacc_calib_MSE
@@ -113,15 +114,16 @@ def run_calibration(fips_num, n_trials, nrep):
     df_final = df_final.sort_values(by='final_score')
     return df_final
 
-def get_best_result(fips_num=53033, index_list=[1], date='1105', sort_by='final_score', t = np.linspace(0, 364, 365)):
-    result_df = pd.read_csv(f'Calibration_Result/53033_calib_result_n_5000_date_1105_p_online_0.csv')
+def get_best_result(fips_num=53033, index_list=[0], date='1105', sort_by='final_score', t = np.linspace(0, 240, 241)):
+    result_df = pd.read_csv(f'Calibration_Result/calib_result_n_5000_date_0220.csv')
     x_name = ['overall_alpha','beta','prop_sus','O_m', 'rae','lam']
+    # x_name = ['overall_alpha','beta','prop_sus','O_m', 'rae','lam']
     # weights = {'vacc_score': 0.5, 'dead_score': 0.1, 'inf_score': 0.1}
     # result_df['weighted_sum'] = result_df.apply(lambda row: sum(row[score] * weight for score, weight in weights.items()), axis=1)
     # result_df = result_df.sort_values(by='weighted_sum')
-    result_df = result_df.sort_values(sort_by)
+    # result_df = result_df.sort_values(sort_by)
     best_df = result_df.iloc[index_list]
-    # best_df.to_csv(f'Data/{fips_num}_points_new_100.csv', index=False, columns = x_name)
+    # best_df.to_csv(f'Data/{fips_num}_points_new.csv', index=False, columns = x_name)
     rets = []
     for i in (index_list):
         param_tuple_list = []
@@ -129,7 +131,13 @@ def get_best_result(fips_num=53033, index_list=[1], date='1105', sort_by='final_
             x_set = (x_name[j], result_df.iloc[i][x_name[j]])
             param_tuple_list.append(x_set)
         print(param_tuple_list)
+        # param_update_list = [('vaccine_risk', 0.000164284*0.75)]
+        B = 20000/2
+        # best_alloc = np.zeros(25)
+        # best_alloc[17] = B
+        # param_update_list += [('U', best_alloc)]
         model = VaccineModel(fips_num, init_param_list = param_tuple_list, t_f= t)
+        # param_update_list = param_update_list)
         ret = odeint(model.run_model, model.get_y0(), t)
         rets.append(ret)
     County_name = {53011: 'Clark County', 53033: 'King County', 53047: 'Okanogan County'}
@@ -141,13 +149,9 @@ def get_best_result(fips_num=53033, index_list=[1], date='1105', sort_by='final_
 
 #  %%
 if __name__ == '__main__':
-    # import argparse
-    n_trials = 1
-    date = '0118'
+    n_trials = 10000
+    date = '0220_2'
     nrep = 1234
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('-f', '--fips_num', type=int, help='FIPS number (region)')
-    # args = parser.parse_args()
     df_final = run_calibration(53033, n_trials, nrep)
     df_final.to_csv(f'Calibration_Result/calib_result_n_{n_trials}_date_{date}.csv')
 

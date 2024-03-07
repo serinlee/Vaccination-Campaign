@@ -86,17 +86,10 @@ def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filenam
     vacc_rate_range = model.vacc_rate_range
     num_group = model.num_group
 
-    c_list = ['grey', 'r', 'b', 'g', 'orange']
-    l_list = ['-',(0,(5,1)), '--',':','-.','dashed']
+    l_list = ['-',(0,(5,1)), '--',':','-.','dashed']*100
     marker_list = ['o','s','D','^','v']
     marker_list = ['']*300
-
-    c_list = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', 
-              '#bcbd22', '#17becf', '#1a9850', '#66a61e', '#a6cee3', '#fdbf6f', '#fb9a99', '#e31a1c', 
-              '#fb9a99', '#33a02c', '#b2df8a', '#a6cee3']*300
-
     label = ["0-17", "18-64", "65+"]
-    policy_label = ['No campaign','Max_Deaths','Max_Vaccination','MMD_Deaths','MMD_Vaccination']
     
     fig, axes = plt.subplots(1, 3, figsize=(5 * 3, 5))
 
@@ -131,13 +124,9 @@ def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filenam
                 axes[0].plot(data_date, 100 * (1 - data_anti_prop[i]) * vacc_rate_range[0], color='grey', marker='o',
                              linestyle='', label=f'Observed data (Age {label[i]})')
 
-        axes[2].plot(t, sum(D), color='grey', linewidth=lw, alpha=1.0, linestyle = l_list[idx],marker = marker_list[idx],markevery=60+idx,
-                    # label= idx,
-                    # label= policy_label[idx])
+        axes[2].plot(t, sum(D), color='grey', linewidth=lw, alpha=1.0, linestyle = l_list[idx], marker = marker_list[idx], markevery=60+idx,
                     label="Simulation Results" if idx == 0 else "")
         axes[1].plot(t, 100 * sum(I) / sum(N), color='grey', linewidth=lw, alpha=1.0, linestyle = l_list[idx],marker = marker_list[idx],markevery=60+idx,
-                    # label= idx
-                    # label= policy_label[idx])
                     label="Simulation Results" if idx == 0 else "")
 
         if error_bar and idx == 0 and includedata:
@@ -158,7 +147,7 @@ def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filenam
                         #  label='Estimated data')
 
     for ax in axes:
-        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.5), fancybox=True, shadow=True, ncol=2)    
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.5), fancybox=True, shadow=True, ncol=2, fontsize=11)    
         if t[-1] <= 100:
             date = [i*7 for i in range(int(t[-1]/7))]
             date_label_full = [i+1 for i in range(int(t[-1]/7))]
@@ -193,7 +182,7 @@ def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filenam
     fig.tight_layout()
     if filename is None:
         plt.show()
-    else: plt.savefig(f"Plot/{filename}.png")
+    else: plt.savefig(f"Plot/{filename}.png",  transparent=False, dpi=300, bbox_inches='tight')
 
 
 def plot_results_with_calib_one_plot(model, t, ret_list,to_plot='vacc', error_bar=False, lw=0.5, filename=None, title='', label=[], includedata=True):
@@ -237,8 +226,8 @@ def plot_results_with_calib_one_plot(model, t, ret_list,to_plot='vacc', error_ba
             ax.set_ylabel('Percentage (%)', fontsize=14)
             for i in range(len(data_anti_prop)):
                 ax.plot(t, 100 * (1 - A_int_by_age[i] / N_int_by_age[i]),
-                            label= label[idx] if i==0 else None, 
-                            color=c_list[idx], linestyle = l_list[idx], marker = marker_list[idx], markevery=60+idx,
+                            # label= label[idx] if i==0 else None, 
+                            # color=c_list[idx], linestyle = l_list[idx], marker = marker_list[idx], markevery=60+idx,
                             linewidth=lw, alpha=1.0)
                 if error_bar and idx == 0 and includedata:
                     color = ['r','b','g']

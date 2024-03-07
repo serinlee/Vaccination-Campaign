@@ -32,7 +32,7 @@ class VaccineModel:
         return np.array(self.alpha_rr_by_age * self.num_reg_group) * self.overall_alpha
 
     def get_p(self):
-        return (np.array([self.p1,self.p2,self.p3,self.p4,self.p5]*self.num_reg_group))
+        return (np.array([self.p_emotional]*self.num_group))
 
     def __init__(self, fips_num=53033,init_param_list = [], param_update_list = [], t_f= np.linspace(0, 364, 365), debug=False):
         # Baseline parameters
@@ -52,11 +52,11 @@ class VaccineModel:
         self.rae = 229
         self.lam = 0.01942
         self.p_online = 0.0
+
+        self.p_emotional = 0.5        
         self.vaccine_risk = 0.00015
         self.k_R = 20000
-        fips_list = [53047, 53033]
-        fips_ind = fips_list.index(fips_num)
-        self.k_E = [2.5, 15][fips_ind]
+        self.k_E = 12
         self.O_m = 1
 
         # Regional parameters
@@ -77,16 +77,11 @@ class VaccineModel:
         self.data_inf_prop = np.loadtxt(f'Data/{self.reg}_data_case.csv', delimiter = ",")/ sum(self.N_by_group)
         self.data_death = np.loadtxt(f'Data/{self.reg}_data_death.csv', delimiter = ",")
         self.C = np.loadtxt(f'Data/{self.reg}_phys_contact_matrix.csv', delimiter = ",")
-        self.opinion_online = np.loadtxt(f'Data/{self.reg}_opinion_contact_matrix.csv', delimiter = ",")
+        self.opinion_online = np.loadtxt(f'Data/{self.reg}_online_opinion_contact_matrix.csv', delimiter = ",")
         self.opinion_physical =  self.get_O_from_physical_contact()
         self.O = (self.p_online*self.opinion_online + (1-self.p_online)*self.opinion_physical)
         self.prop_sus = 0.71
         self.prop_init_inf = self.data_inf_prop[0] / self.inf_rate_range[0]
-        self.p1 = 0.5
-        self.p2 = 0.5
-        self.p3 = 0.5
-        self.p4 = 0.5
-        self.p5 = 0.5
         self.alpha = self.get_alpha()
         self.y0 = self.get_y0()
         self.p = self.get_p()
@@ -104,6 +99,7 @@ class VaccineModel:
     def get_lambda(self, beta, C, I, N):
         eff_N = np.zeros(len(C))
         for i in range(len(C)):
+            # eff_N[i] = (I[i] / N[i])
             numerator_sum = sum(C[k][i] * I[k] for k in range(len(C)))
             denominator_sum = sum(C[k][i] * N[k] for k in range(len(C)))
             eff_N[i] = (numerator_sum / denominator_sum)
@@ -116,7 +112,7 @@ class VaccineModel:
         return lam
 
     def check_dependency(self, param_name):
-        if param_name in ["p1","p2","p3","p4","p5"]:
+        if param_name in ["p_emotional"]:
             existing_value = self.p.copy()
             self.p = self.get_p()
             if self.debug : print(f"Changed p from {existing_value[:5]} to {self.p[:5]}")

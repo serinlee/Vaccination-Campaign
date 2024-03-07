@@ -3,10 +3,10 @@ import sys
 import fileinput
 import numpy as np
 
-B_list = [200*50, 200]
-fips_list = [53033, 53047]
-p_list = [0,1,2,3,4]
-sa_list = [i for i in range(11)]
+B_list = [5000, 10000, 20000]
+fips_list = [53033]
+p_list = [0]
+i_list = [i for i in range(5)]
 count=20
 
 # for fips in fips_list:
@@ -23,7 +23,7 @@ count=20
 #                 line =  f"python alloc.py -f {fips} -p {p} -B {B_list[fips_list.index(fips)]}\n"
 #             sys.stdout.write(line)
 #         count+=1
-for fips in fips_list:
+for B in B_list:
     for sa in sa_list:
         org_sh = 'run.sh'
         my_sh = 'sa_'+str(count)+'.sh'
