@@ -1,9 +1,0 @@
-*.csv
-*.pkl
-*.png
-*.xlsx
-!/Data/**/*.csv
-/Result
-/SA_Result
-*.pyc
-.DS_STORE
