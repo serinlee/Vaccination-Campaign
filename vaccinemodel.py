@@ -5,8 +5,6 @@ from scipy.integrate import odeint
 import math
 import pandas as pd
 
-# %% Initialize
-
 class VaccineModel:
     def get_y0(self):
         SA0 = self.prop_anti * self.prop_sus * self.N_by_group
@@ -20,6 +18,7 @@ class VaccineModel:
         return y0
     
     def get_O_from_physical_contact(self):
+        # Modifies age matrix
         child_rows = np.arange(0, self.num_group, self.num_age_group)
         adult_rows = np.setdiff1d(np.arange(self.num_group), child_rows)
         mask = np.isin(np.arange(self.num_group), adult_rows)[:, None] & np.isin(np.arange(self.num_group), child_rows)
@@ -36,13 +35,12 @@ class VaccineModel:
 
     def __init__(self, fips_num=53033,init_param_list = [], param_update_list = [], t_f= np.linspace(0, 364, 365), debug=False):
         # Baseline parameters
-        self.t_c = np.linspace(0, 58, 59)
-        self.calib_period = 59
-        self.t_f = t_f
+        self.t_c = np.linspace(0, 58, 59) # Calibration period
+        self.t_f = t_f # Full simulation period
         self.beta = 1.67
         self.num_disease = 4
         self.num_vacc_group = 2
-        self.num_comp = 8
+        self.num_comp = self.num_disease*self.num_vacc_group
         self.VE_beta = 0.5
         self.VE_death = 0.1
         self.rho = 1/10
@@ -65,9 +63,7 @@ class VaccineModel:
         self.num_group = 25
         self.inf_rate_range = np.array([0.04, 0.047, 0.036])
         self.death_rate_range = np.array([1.27, 1.24, 1.32])
-        self.vacc_rate_range = np.array([1.0, 0.975, 1.025])
-        self.date_label = ["1/1/23", "1/8/23", "1/15/23", "1/22/23", "1/29/23", "2/5/23", "2/12/23", "2/19/23"]
-        self.data_date = [i * 7 for i in range(len(self.date_label))]
+        self.vacc_rate_range = np.array([1.0, 0.975, 1.025]) # upper and lower bounds
 
         # Read data
         self.reg = fips_num
@@ -86,20 +82,17 @@ class VaccineModel:
         self.y0 = self.get_y0()
         self.p = self.get_p()
         self.U = [0] * self.num_group
+        self.mean_eta, self.eta_all = [],[]
         self.param_update_list = param_update_list
         self.param_updated  = False
         self.debug = debug
         self.init_param_list = init_param_list
         for param_name, param_value in self.init_param_list:
                 self.update_param(param_name, param_value)
-        
-        self.min_rat, self.max_rat,self.min_emo, self.max_emo, self.mean_rat, self.mean_emo, self.mean_eta, self.eta_all = 0,0,0,0,[],[],[], []
-
 
     def get_lambda(self, beta, C, I, N):
         eff_N = np.zeros(len(C))
         for i in range(len(C)):
-            # eff_N[i] = (I[i] / N[i])
             numerator_sum = sum(C[k][i] * I[k] for k in range(len(C)))
             denominator_sum = sum(C[k][i] * N[k] for k in range(len(C)))
             eff_N[i] = (numerator_sum / denominator_sum)
@@ -107,7 +100,6 @@ class VaccineModel:
         lam = np.zeros(len(C))
         for i in range(len(C)):
             for j in range(len(C)):
-                # lam[i] += C[i][j] * beta[j] * eff_N[j]
                 lam[i] += C[i][j] * beta[i] * eff_N[j]
         return lam
 
@@ -130,24 +122,15 @@ class VaccineModel:
 
     def update_param(self, param_name, param_value):
         existing_value = getattr(self, param_name)
-        # if type(existing_value) != type(param_value):
-        #     raise ValueError(f"Cannot set '{param_name}' with a different data type or format. "
-        #                      f"Existing: {existing_value}. New: {param_value}.")
+        if type(existing_value) != type(param_value):
+            raise ValueError(f"Cannot set '{param_name}' with a different data type or format. "
+                             f"Existing: {existing_value}. New: {param_value}.")
         setattr(self, param_name, param_value)
         if self.debug == True: print(f"Changed {param_name} from {existing_value} to {getattr(self, param_name)}")
         self.check_dependency(param_name)
 
-    def check_range(self, range_rational, range_emotional, eta, t):
-        if(self.min_rat > np.min(range_rational)): self.min_rat = np.min(range_rational)
-        if(self.max_rat < np.max(range_rational)): self.max_rat = np.max(range_rational)
-        if(self.min_emo > np.min(range_emotional)): self.min_emo = np.min(range_emotional)
-        if(self.max_emo < np.max(range_emotional)): self.max_emo = np.max(range_emotional)
-        self.mean_rat.append(np.mean(range_rational))
-        self.mean_emo.append(np.mean(range_emotional))
-        self.mean_eta.append([t,np.mean(eta)])
-        self.eta_all.append([t,(eta)])
-
     def run_model(self, y, t):
+        # If there is param_update_list (after calibration period), update here just once
         if (not self.param_updated) and (t > self.t_c[-1]):
             for param_name, param_value in self.param_update_list:
                 self.update_param(param_name, param_value)
@@ -169,10 +152,8 @@ class VaccineModel:
         E_eta = np.array([1 / (1 + np.exp(-self.k_E * i)) for i in np.divide(np.subtract(P, A), N)])
 
         eta = (1 - self.p) * R_eta + self.p * E_eta
-        self.check_range(R_eta, E_eta, eta, t)
-
-        val = np.subtract(C_P, C_A)
-        # print(np.min(val), np.max(val))
+        self.mean_eta.append([t,np.mean(eta)])
+        self.eta_all.append([t,(eta)])
 
         opi_AP_lam = np.zeros(self.num_group)
         if t < self.t_c[-1]:
@@ -213,8 +194,6 @@ class VaccineModel:
 
 
 #%%
-# from plot import *
-# model = VaccineModel()
-# ret = odeint(model.run_model, model.get_y0(), model.t_f)
-# plot_results_with_calib(model, model.t_f, [ret], error_bar=True)
-# %%
+if __name__ == '__main__':
+    model = VaccineModel()
+    ret = odeint(model.run_model, model.get_y0(), model.t_f)
