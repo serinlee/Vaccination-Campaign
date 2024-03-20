@@ -1,3 +1,9 @@
+#####################################################################
+# A Module that sets a vaccinemodel problem given parameter setting
+# To run a model, use odeint as below
+#  ret = odeint(model.run_model, model.get_y0(), model.t_f)
+#####################################################################
+
 #%% Import settings
 import numpy as np
 import pandas as pd
@@ -49,7 +55,7 @@ class VaccineModel:
         self.overall_alpha = 0.00025
         self.rae = 229
         self.lam = 0.01942
-        self.p_online = 0.0
+        self.p_online = 0.0 # probability of using facebook data
 
         self.p_emotional = 0.5        
         self.vaccine_risk = 0.00015
@@ -83,10 +89,14 @@ class VaccineModel:
         self.p = self.get_p()
         self.U = [0] * self.num_group
         self.mean_eta, self.eta_all = [],[]
-        self.param_update_list = param_update_list
+
+        # Change parameter setting after calibration period. This setting changes after t_c.
+        self.param_update_list = param_update_list 
         self.param_updated  = False
         self.debug = debug
-        self.init_param_list = init_param_list
+
+        # Change initial parameter setting
+        self.init_param_list = init_param_list 
         for param_name, param_value in self.init_param_list:
                 self.update_param(param_name, param_value)
 
@@ -122,9 +132,6 @@ class VaccineModel:
 
     def update_param(self, param_name, param_value):
         existing_value = getattr(self, param_name)
-        if type(existing_value) != type(param_value):
-            raise ValueError(f"Cannot set '{param_name}' with a different data type or format. "
-                             f"Existing: {existing_value}. New: {param_value}.")
         setattr(self, param_name, param_value)
         if self.debug == True: print(f"Changed {param_name} from {existing_value} to {getattr(self, param_name)}")
         self.check_dependency(param_name)

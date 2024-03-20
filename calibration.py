@@ -1,4 +1,7 @@
-#%%
+#####################################################################
+# A Module to calibrate parameters
+#####################################################################
+
 from vaccinemodel import *
 from plot import *
 
@@ -10,7 +13,8 @@ def get_age_calib_val(model, X):
     return(X_interest)
 
 def get_calib_score_MSE(model, ret):
-    [SA, IA, RA, DA, SP, IP, RP, DP] = np.array(np.transpose(np.reshape(np.array(ret), (len(model.t_f), model.num_group,model.num_comp))))[:,:,model.data_date]
+    calib_date = [i * 7 for i in range(int(len(model.t_c)/7))]
+    [SA, IA, RA, DA, SP, IP, RP, DP] = np.array(np.transpose(np.reshape(np.array(ret), (len(model.t_f), model.num_group,model.num_comp))))[:,:,calib_date]
     I = IA+IP
     A = SA+IA+RA
     P = SP+IP+RP
@@ -42,9 +46,6 @@ values,np.zeros(len(values)))))/np.mean(model.data_death*model.death_rate_range[
 
     score = ([score_vacc, score_death, score_inf])
     return (score)
-    # print(score)
-
-    return np.sum(score)
 
 def vacc_calib_MSE(fips_num, samp_list, plot=False):
     model = VaccineModel(fips_num, init_param_list = samp_list, t_f= np.linspace(0, 58, 59), debug=False)
@@ -75,27 +76,20 @@ def run_code_parallel(obj_function, fips_num, param_update_lists):
     return results
 
 def run_calibration(fips_num, n_trials, nrep):
-    # x_name = ['overall_alpha','beta','prop_sus','O_m','rae','lam']
-    x_name = ['overall_alpha','beta','prop_sus','O_m', 'rae','lam','k_R','k_E','vaccine_risk']
+    x_name = ['overall_alpha','beta','prop_sus','O_m','rae','lam']
     x_dim = len(x_name)
     overall_alpha_range = [0.0001,0.0002] 
-    beta_range = [1.5, 3.5] # default: 2.0
-    prop_sus_range = [0.4, 0.8] # default: 0.6
-    O_m_range = [1, 10] # default: 0.5
-    lam_range = [0.01, 0.05] # default: 0.25
-    rae_range = [150, 250] # default: 200
-    k_r_range = [10000, 30000]
-    k_e_range = [5, 20]
-    v_r_range = [0, 0.0003]
-    # p_range = [0,1]
+    beta_range = [1.5, 3.5]
+    prop_sus_range = [0.4, 0.8]
+    O_m_range = [1, 10]
+    lam_range = [0.01, 0.05]
+    rae_range = [150, 250]
 
-    x_list = np.array([overall_alpha_range,beta_range,prop_sus_range, O_m_range, rae_range, lam_range, k_r_range, k_e_range, v_r_range])
-    # x_list = np.array([overall_alpha_range,beta_range,prop_sus_range, O_m_range, rae_range, lam_range])
+    x_list = np.array([overall_alpha_range, beta_range, prop_sus_range, O_m_range, rae_range, lam_range])
 
     x_l = x_list[:,0]
     x_u = x_list[:,1]
     obj_function = vacc_calib_MSE
-    func_name = f"calib_{fips_num}"
     param_update_lists = get_samp_by_lhs(n_trials, nrep, x_dim, x_u, x_l, x_name)
     results = (run_code_parallel(obj_function, fips_num, param_update_lists))
     data_list = []
@@ -114,45 +108,34 @@ def run_calibration(fips_num, n_trials, nrep):
     df_final = df_final.sort_values(by='final_score')
     return df_final
 
-def get_best_result(fips_num=53033, index_list=[0], date='1105', sort_by='final_score', t = np.linspace(0, 240, 241)):
-    result_df = pd.read_csv(f'Calibration_Result/calib_result_n_5000_date_0220.csv')
-    x_name = ['overall_alpha','beta','prop_sus','O_m', 'rae','lam']
-    # x_name = ['overall_alpha','beta','prop_sus','O_m', 'rae','lam']
-    # weights = {'vacc_score': 0.5, 'dead_score': 0.1, 'inf_score': 0.1}
-    # result_df['weighted_sum'] = result_df.apply(lambda row: sum(row[score] * weight for score, weight in weights.items()), axis=1)
-    # result_df = result_df.sort_values(by='weighted_sum')
-    # result_df = result_df.sort_values(sort_by)
+def get_best_result(filename, fips_num=53033, index_list=[0], t = np.linspace(0, 59, 60)):
+    result_df = pd.read_csv(filename)
+    x_name = ['overall_alpha','beta','prop_sus','O_m','rae','lam']
     best_df = result_df.iloc[index_list]
-    # best_df.to_csv(f'Data/{fips_num}_points_new.csv', index=False, columns = x_name)
     rets = []
+    # Show calibration results
     for i in (index_list):
         param_tuple_list = []
         for j in range(len(x_name)):
             x_set = (x_name[j], result_df.iloc[i][x_name[j]])
             param_tuple_list.append(x_set)
-        print(param_tuple_list)
-        # param_update_list = [('vaccine_risk', 0.000164284*0.75)]
-        B = 20000/2
-        # best_alloc = np.zeros(25)
-        # best_alloc[17] = B
-        # param_update_list += [('U', best_alloc)]
         model = VaccineModel(fips_num, init_param_list = param_tuple_list, t_f= t)
-        # param_update_list = param_update_list)
         ret = odeint(model.run_model, model.get_y0(), t)
         rets.append(ret)
     County_name = {53011: 'Clark County', 53033: 'King County', 53047: 'Okanogan County'}
-    # f"Model results without policy in {County_name.get(fips_num)}" 
     plot_results_with_calib(model, t, rets, error_bar=True, 
                             lw=1.5, filename=f'{fips_num}_calib', title=f"Best calibration result in {County_name.get(fips_num)}, WA")
+    # best_df.to_csv(f'Data/{fips_num}_points_new.csv', index=False, columns = x_name)
     return model
     
 
 #  %%
 if __name__ == '__main__':
-    n_trials = 10000
-    date = '0220_2'
+    n_trials = 100
+    date = '0307'
+    filename = f'Results/Calibration_Result/calib_result_n_{n_trials}_date_{date}.csv'
     nrep = 1234
     df_final = run_calibration(53033, n_trials, nrep)
-    df_final.to_csv(f'Calibration_Result/calib_result_n_{n_trials}_date_{date}.csv')
-
+    df_final.to_csv(filename)
+    get_best_result(filename)
 # %%

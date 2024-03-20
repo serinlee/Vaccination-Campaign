@@ -1,0 +1,10 @@
+*.csv
+*.pkl
+*.png
+*.xlsx
+!/Data/**/*.csv
+/Results
+/Run in parallel computing
+*.pyc
+.DS_STORE
+deprecated_*.py

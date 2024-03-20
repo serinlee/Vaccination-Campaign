@@ -1,3 +1,7 @@
+#####################################################################
+# A Module that plots vaccinemodel results
+#####################################################################
+
 #%% Import settings
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -46,7 +50,7 @@ def plot_data_points(model):
 
     axes[0].set_title('Vaccinated population by age group', fontsize=14)
     axes[1].set_title('Infectious population', fontsize=14)
-    axes[2].set_title('Dead population', fontsize=14)
+    axes[2].set_title('Deceased population', fontsize=14)
     
     axes[0].set_ylabel("Percentage (%)", fontsize=14)
     axes[1].set_ylabel("Percentage (%)", fontsize=14)
@@ -56,7 +60,7 @@ def plot_data_points(model):
     axes[1].set_ylim([0.0, 0.05*100])
     plt.suptitle("Target Data in King County, WA", fontsize=18)
     fig.tight_layout()
-    plt.savefig(f"Plot/Target_{str(model.reg)}.png")
+    plt.savefig(f"Results/Plot/Target_{str(model.reg)}.png")
     plt.show()
 
 def get_age_calib_val(model, X):
@@ -146,7 +150,7 @@ def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filenam
 
     axes[0].set_title('Vaccinated population by age group', fontsize=14)
     axes[1].set_title('Infectious population', fontsize=14)
-    axes[2].set_title('Dead population', fontsize=14)
+    axes[2].set_title('Deceased population', fontsize=14)
     
     axes[0].set_ylabel("Percentage (%)", fontsize=14)
     axes[1].set_ylabel("Percentage (%)", fontsize=14)
@@ -158,11 +162,11 @@ def plot_results_with_calib(model, t, ret_list, error_bar=False, lw=0.5, filenam
     fig.tight_layout()
     if filename is None:
         plt.show()
-    else: plt.savefig(f"Plot/{filename}.png",  transparent=False, dpi=300, bbox_inches='tight')
+    else: plt.savefig(f"Results/Plot/{filename}.png",  transparent=False, dpi=300, bbox_inches='tight')
 
 def plot_results(model, t, ret_list, to_plot='vacc', lw=0.5, filename=None, title='', label=None):
-    if to_plot not in ['vacc', 'vacc_all','inf','dead']:
-        raise ValueError("Current plot can show vaccination by age ('vacc'), overall vaccination rate('vacc_all'), infection rate('inf'), dead population ('dead') only. Use these keywords to plot or customize plot_results function")
+    if to_plot not in ['vacc', 'vacc_all','inf','deceased']:
+        raise ValueError("Current plot can show vaccination by age ('vacc'), overall vaccination rate('vacc_all'), infection rate('inf'), deceased population ('deceased') only. Use these keywords to plot or customize plot_results function")
         
     c_list = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', 
               '#bcbd22', '#17becf', '#1a9850', '#66a61e', '#a6cee3', '#fdbf6f', '#fb9a99', '#e31a1c', 
@@ -199,8 +203,8 @@ def plot_results(model, t, ret_list, to_plot='vacc', lw=0.5, filename=None, titl
             ax.set_ylabel("Percentage (%)", fontsize=14)
             ax.plot(t, 100 * sum(I) / sum(N), color=c_list[idx], label=label[idx] if label is not None else '', linewidth=lw, alpha=1.0, linestyle='-', marker='')
             
-        elif to_plot == 'dead':
-            ax.set_title('Dead population', fontsize=14)
+        elif to_plot == 'deceased':
+            ax.set_title('Deceased population', fontsize=14)
             ax.set_ylabel("Person", fontsize=14)
             ax.plot(t, sum(D), color=c_list[idx], label=label[idx] if label is not None else '',linewidth=lw, alpha=1.0, linestyle='-', marker='')
             
@@ -220,17 +224,24 @@ def plot_results(model, t, ret_list, to_plot='vacc', lw=0.5, filename=None, titl
             ax.set_xticks(date)
             ax.set_xticklabels(date_label_full[:len(date)], rotation=0)
             ax.tick_params(axis='both', which='both', labelsize=10)
-
+    
+    if label is not None:
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.5), fancybox=True, shadow=True, ncol=2)
+        
     fig.tight_layout()
     if filename is None:
         plt.show()
     else: 
-        plt.savefig(f"Plot/{filename}.png")
+        plt.savefig(f"Results/Plot/{filename}.png")
 
 # %%
 if __name__ == '__main__':
     from scipy.integrate import odeint
     model = VaccineModel()
     ret = odeint(model.run_model, model.get_y0(), model.t_f)
-    plot_results_with_calib(model, model.t_f, [ret])
-    plot_results(model, model.t_f, [ret],'vacc_all')
+    model2 = VaccineModel(init_param_list = [('beta', 3)]) # Model 2 changes the beta value
+    ret2 = odeint(model2.run_model, model2.get_y0(), model2.t_f)
+    plot_results_with_calib(model, model.t_f, [ret, ret2])
+    plot_results(model, model.t_f, [ret, ret2],'vacc_all', label=['Model', 'Model 2'])
+
+# %%
